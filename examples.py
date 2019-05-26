@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import timeit
 from systems import Car, DubinsCar
 from ilqr import iterative_LQR_quadratic_cost
-
+from constraints import CircleConstraintForCar
 
 def example_1():
     ntimesteps = 100
@@ -39,12 +39,6 @@ def example_1():
     myiLQR = iterative_LQR_quadratic_cost(
         car_system, noisy_targets, dt)
 
-    for i in range(myiLQR.horizon-1):
-        myiLQR.inputs[0, i] = (
-            target_states[2, i + 1] - target_states[2, i])/dt
-        myiLQR.inputs[1, i] = (
-            target_states[3, i+1]-target_states[3, i])/dt
-
     start_time = timeit.default_timer()
     myiLQR()
     elapsed = timeit.default_timer() - start_time
@@ -53,8 +47,8 @@ def example_1():
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: 2D, x and y.  ')
     plt.axis('equal')
-    plt.plot(myiLQR.target_states[0, :],
-             myiLQR.target_states[1, :], '--r', label='Target', linewidth=2)
+    plt.plot(noisy_targets[0, :],
+             noisy_targets[1, :], '--r', label='Target', linewidth=2)
     plt.plot(myiLQR.states[0, :], myiLQR.states[1, :],
              '-+b', label='iLQR', linewidth=1.0)
     plt.xlabel('x (meters)')
@@ -98,10 +92,6 @@ def example_2():
     dubins_car_system.set_control_limit(np.array([[0, 2.0], [-0.2, 0.2]]))
     myiLQR = iterative_LQR_quadratic_cost(
         dubins_car_system, noisy_targets, dt)
-    for i in range(myiLQR.horizon - 1):
-        myiLQR.inputs[0, i] = 0.7
-        myiLQR.inputs[1, i] = (
-            target_states[2, i + 1] - target_states[2, i])/dt
 
     start_time = timeit.default_timer()
     myiLQR()
@@ -119,6 +109,36 @@ def example_2():
     plt.ylabel('y (meters)')
     plt.show()
 
+def example_3():
+    ntimesteps = 100
+    target_states = np.zeros((4, ntimesteps))
+    noisy_targets = np.zeros((4, ntimesteps))
+    ref_vel = np.zeros(ntimesteps)
+    dt = 0.2
+    curv = 0.1
+    a = 1.5
+    v_max = 11
+    for i in range(40, ntimesteps):
+        if ref_vel[i - 1] > v_max:
+            a = 0
+        ref_vel[i] = ref_vel[i - 1] + a*dt
+    for i in range(1, ntimesteps):
+        target_states[0, i] = target_states[0, i-1] + \
+            np.cos(target_states[3, i-1])*dt*ref_vel[i - 1]
+        target_states[1, i] = target_states[1, i-1] + \
+            np.sin(target_states[3, i-1])*dt*ref_vel[i - 1]
+        target_states[2, i] = ref_vel[i]
+        target_states[3, i] = target_states[3, i-1] + curv*dt
+        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
+        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
+        noisy_targets[2, i] = target_states[2, i]
+        noisy_targets[3, i] = target_states[3, i] + random.uniform(0, 1.0)
+    car_system = Car()
+    car_system.set_dt(dt)
+    car_system.set_cost(
+        np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([1000.0, 1000.0]))
+
+    constraint = CircleConstraintForCar(np.array([0, 40]), 10.0, car_system)
 
 if __name__ == '__main__':
     example_1()
