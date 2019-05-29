@@ -2,11 +2,11 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 import timeit
-from systems import Car, DubinsCar
+from systems import *
 from ilqr import iterative_LQR_quadratic_cost
-# from constraints import CircleConstraintForCar
+from constraints import CircleConstraintForCar
 
-def example_1():
+def example_acc():
     ntimesteps = 100
     target_states = np.zeros((4, ntimesteps))
     noisy_targets = np.zeros((4, ntimesteps))
@@ -16,12 +16,10 @@ def example_1():
     a = 1.5
     v_max = 11
     
-
-
     car_system = Car()
     car_system.set_dt(dt)
     car_system.set_cost(
-        np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([1000.0, 1000.0]))
+        np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([3000.0, 1000.0]))
     car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
     init_inputs = np.zeros((car_system.control_size, ntimesteps - 1))
 
@@ -53,9 +51,14 @@ def example_1():
     myiLQR()
     elapsed = timeit.default_timer() - start_time
     print("elapsed time: ", elapsed)
+
+    jerks = np.zeros(ntimesteps)
+    for i in range(1, ntimesteps - 1):
+        jerks[i] = (myiLQR.inputs[0, i] - myiLQR.inputs[0, i - 1])/dt
+    
     plt.figure
-    plt.title('theta')
-    plt.plot(myiLQR.states[3, :], '--r', label='theta', linewidth=2)
+    plt.title('jerks')
+    plt.plot(jerks, '--r', label='jerks', linewidth=2)
 
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: 2D, x and y.  ')
@@ -80,8 +83,86 @@ def example_1():
     plt.ylabel('acceleration and turning rate input')
     plt.show()
 
+def example_jerk():
+    ntimesteps = 100
+    target_states = np.zeros((5, ntimesteps))
+    noisy_targets = np.zeros((5, ntimesteps))
+    ref_vel = np.zeros(ntimesteps)
+    ref_acc = np.zeros(ntimesteps)
+    dt = 0.2
+    curv = 0.1
+    a = 1.5
+    v_max = 11
+    
+    car_system = CarAcceleration()
+    car_system.set_dt(dt)
+    car_system.set_cost(
+        np.diag([50.0, 50.0, 1000.0, 1000, 0.0]), np.diag([3000.0, 1000.0]))
+    car_system.set_control_limit(np.array([[-6, 6], [-0.3, 0.3]]))
+    init_inputs = np.zeros((car_system.control_size, ntimesteps - 1))
 
-def example_2():
+    for i in range(40, ntimesteps):
+        if ref_vel[i - 1] > v_max:
+            a = 0
+        ref_acc[i] = a
+        ref_vel[i] = ref_vel[i - 1] + a*dt
+
+    for i in range(1, ntimesteps):
+        target_states[0, i] = target_states[0, i-1] + \
+            np.cos(target_states[4, i-1])*dt*ref_vel[i - 1]
+        target_states[1, i] = target_states[1, i-1] + \
+            np.sin(target_states[4, i-1])*dt*ref_vel[i - 1]
+        target_states[2, i] = ref_vel[i]
+        target_states[3, i] = ref_acc[i]
+        target_states[4, i] = target_states[4, i-1] + curv*dt
+        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
+        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
+        noisy_targets[2, i] = target_states[2, i]
+        noisy_targets[3, i] = target_states[3, i]
+        noisy_targets[4, i] = target_states[4, i] + random.uniform(0, 1.0)
+    
+    for i in range(1, ntimesteps):
+        init_inputs[0, i - 1] = (noisy_targets[3, i] - noisy_targets[3, i - 1])/dt
+        init_inputs[1, i - 1] = (noisy_targets[4, i] - noisy_targets[4, i - 1])/dt
+
+    myiLQR = iterative_LQR_quadratic_cost(
+        car_system, noisy_targets, dt)
+    myiLQR.inputs = init_inputs
+
+    start_time = timeit.default_timer()
+    myiLQR()
+    elapsed = timeit.default_timer() - start_time
+    print("elapsed time: ", elapsed)
+    plt.figure
+    plt.title('Acceleration')
+    plt.plot(myiLQR.states[3, :], '--r', label='Acceleration', linewidth=2)
+
+    plt.figure(figsize=(8*1.1, 6*1.1))
+    plt.title('iLQR: 2D, x and y.  ')
+    plt.axis('equal')
+    plt.plot(noisy_targets[0, :],
+             noisy_targets[1, :], '--r', label='Target', linewidth=2)
+    plt.plot(myiLQR.states[0, :], myiLQR.states[1, :],
+             '-+b', label='iLQR', linewidth=1.0)
+    plt.xlabel('x (meters)')
+    plt.ylabel('y (meters)')
+    plt.figure(figsize=(8*1.1, 6*1.1))
+    plt.title('iLQR: state vs. time.  ')
+    plt.plot(myiLQR.states[2, :], '-b', linewidth=1.0, label='speed')
+    plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+    plt.ylabel('speed')
+    plt.figure(figsize=(8*1.1, 6*1.1))
+    plt.title('iLQR: inputs vs. time.  ')
+    plt.plot(myiLQR.inputs[0, :], '-r',
+             linewidth=1.0, label='Jerk')
+    plt.plot(myiLQR.inputs[1, :], '-b',
+             linewidth=1.0, label='Turning rate')
+    plt.ylabel('Jerk and turning rate input')
+    plt.legend
+    plt.show()
+
+
+def example_dubins():
     ntimesteps = 200
     target_states = np.zeros((3, ntimesteps))
     noisy_targets = np.zeros((3, ntimesteps))
@@ -122,7 +203,7 @@ def example_2():
     plt.ylabel('y (meters)')
     plt.show()
 
-def example_3():
+def example_constraints():
     ntimesteps = 100
     target_states = np.zeros((4, ntimesteps))
     noisy_targets = np.zeros((4, ntimesteps))
@@ -154,5 +235,5 @@ def example_3():
     constraint = CircleConstraintForCar(np.array([0, 40]), 10.0, car_system)
 
 if __name__ == '__main__':
-    example_1()
-    # example_2()
+    example_jerk()
+    # example_acc()
