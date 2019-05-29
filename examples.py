@@ -15,6 +15,16 @@ def example_1():
     curv = 0.1
     a = 1.5
     v_max = 11
+    
+
+
+    car_system = Car()
+    car_system.set_dt(dt)
+    car_system.set_cost(
+        np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([1000.0, 1000.0]))
+    car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+    init_inputs = np.zeros((car_system.control_size, ntimesteps - 1))
+
     for i in range(40, ntimesteps):
         if ref_vel[i - 1] > v_max:
             a = 0
@@ -26,23 +36,23 @@ def example_1():
             np.sin(target_states[3, i-1])*dt*ref_vel[i - 1]
         target_states[2, i] = ref_vel[i]
         target_states[3, i] = target_states[3, i-1] + curv*dt
-        noisy_targets[0, i] = target_states[0, i]# + random.uniform(0, 5.0)
-        noisy_targets[1, i] = target_states[1, i]# + random.uniform(0, 5.0)
+        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
+        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
         noisy_targets[2, i] = target_states[2, i]
-        noisy_targets[3, i] = target_states[3, i]# + random.uniform(0, 1.0)
+        noisy_targets[3, i] = target_states[3, i] + random.uniform(0, 1.0)
+    
+    for i in range(1, ntimesteps):
+        init_inputs[0, i - 1] = (noisy_targets[2, i] - noisy_targets[2, i - 1])/dt
+        init_inputs[1, i - 1] = (noisy_targets[3, i] - noisy_targets[3, i - 1])/dt
 
-    car_system = Car()
-    car_system.set_dt(dt)
-    car_system.set_cost(
-        np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([1000.0, 1000.0]))
-    car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
     myiLQR = iterative_LQR_quadratic_cost(
         car_system, noisy_targets, dt)
+    myiLQR.inputs = init_inputs
 
     start_time = timeit.default_timer()
     myiLQR()
     elapsed = timeit.default_timer() - start_time
-    # print("elapsed time: ", elapsed)
+    print("elapsed time: ", elapsed)
     plt.figure
     plt.title('theta')
     plt.plot(myiLQR.states[3, :], '--r', label='theta', linewidth=2)

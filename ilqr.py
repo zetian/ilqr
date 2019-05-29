@@ -121,6 +121,7 @@ class iterative_LQR_quadratic_cost:
             # print("Vxx", Vxx)
 
     def __call__(self):
+        # print(self.inputs)
         self.min_cost = self.cost()
         # print("init cost: ", self.min_cost)
         for iter in range(self.maxIter):
