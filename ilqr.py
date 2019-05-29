@@ -26,6 +26,7 @@ class iterative_LQR_quadratic_cost:
         self.R = sys.R
         self.Qf = sys.Q_f
         self.maxIter = 30
+        self.min_cost = 0.0
         self.LM_parameter = 0.0
         self.states = np.zeros(
             (self.n_states, self.horizon))
@@ -47,20 +48,28 @@ class iterative_LQR_quadratic_cost:
     def forward_pass(self):
         prev_states = np.copy(self.states)
         prev_inputs = np.copy(self.inputs)
-        prev_cost = self.cost()
+        # prev_cost = self.cost()
         alpha = 1.0
-        while (True):
+        cnt = 50
+        while (cnt >= 0):
+            cnt -= 1
             for i in range(0, self.horizon - 1):
+            # for i in range(0, 2):
                 self.inputs[:, i] = self.inputs[:, i] + alpha*np.reshape(self.k[i, :, :], (-1,)) + np.reshape(
                     np.dot(self.K[i, :, :], np.reshape(self.states[:, i] - prev_states[:, i], (-1, 1))), (-1,))
+                # print("self.inputs[:, i] before constraints: ", self.inputs[:, i])
                 if self.system.control_limited:
                     for j in range(self.m_inputs):
                         self.inputs[j, i] = min(max(
                             self.inputs[j, i], self.system.control_limit[j, 0]), self.system.control_limit[j, 1])
+                # print("self.inputs[:, i]: ", self.inputs[:, i])
                 self.states[:, i + 1] = self.system.model_f(
                     self.states[:, i], self.inputs[:, i])
+                # print("self.states[:, i]: ", self.states[:, i])
+                # print("self.states[:, i + 1]: ", self.states[:, i + 1])
             cost = self.cost()
-            if cost < prev_cost:
+            if cost < self.min_cost:
+                self.min_cost = cost
                 # print('cost decreased after this pass. learning_rate: ', alpha)
                 break
             elif alpha < 1e-4:
@@ -82,8 +91,10 @@ class iterative_LQR_quadratic_cost:
         Vxx = 2.0*self.Qf
         dl_dxdx = 2.0*self.Q
         dl_dudu = 2.0*self.R
+        # print(Vxx)
         dl_dudx = np.zeros((self.m_inputs, self.n_states))
         for i in range(self.horizon - 2, -1, -1):
+        # for i in range(0, -1, -1):
             u = self.inputs[:, i]
             x = self.states[:, i]
             df_du = self.system.compute_df_du(x, u)
@@ -91,10 +102,14 @@ class iterative_LQR_quadratic_cost:
             dl_dx = 2.0*np.dot(self.Q, x - self.target_states[:, i])
             dl_du = 2.0*np.dot(self.R, u)
             Qx = dl_dx + np.dot(df_dx.T, Vx)
+            # print("Qx", Qx)
             Qu = dl_du + np.dot(df_du.T, Vx)
+            # print("Qx", Qu)
             Vxx_augmented = Vxx + self.LM_parameter * np.eye(self.n_states)
             Qxx = dl_dxdx + np.dot(np.dot(df_dx.T, Vxx_augmented), df_dx)
+            # print("Qxx", Qxx)
             Quu = dl_dudu + np.dot(np.dot(df_du.T, Vxx_augmented), df_du)
+            # print("Quu", Quu)
             Qux = dl_dudx + np.dot(np.dot(df_du.T, Vxx_augmented), df_dx)
             Quu_inv = np.linalg.inv(Quu)
             k = -np.dot(Quu_inv, Qu)
@@ -103,8 +118,11 @@ class iterative_LQR_quadratic_cost:
             self.K[i, :, :] = K
             Vx = Qx + np.dot(K.T, Qu)
             Vxx = Qxx + np.dot(K.T, Qux)
+            # print("Vxx", Vxx)
 
     def __call__(self):
+        self.min_cost = self.cost()
+        # print("init cost: ", self.min_cost)
         for iter in range(self.maxIter):
             if (self.converge):
                 break

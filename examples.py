@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import timeit
 from systems import Car, DubinsCar
 from ilqr import iterative_LQR_quadratic_cost
-from constraints import CircleConstraintForCar
+# from constraints import CircleConstraintForCar
 
 def example_1():
     ntimesteps = 100
@@ -26,10 +26,10 @@ def example_1():
             np.sin(target_states[3, i-1])*dt*ref_vel[i - 1]
         target_states[2, i] = ref_vel[i]
         target_states[3, i] = target_states[3, i-1] + curv*dt
-        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
-        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
+        noisy_targets[0, i] = target_states[0, i]# + random.uniform(0, 5.0)
+        noisy_targets[1, i] = target_states[1, i]# + random.uniform(0, 5.0)
         noisy_targets[2, i] = target_states[2, i]
-        noisy_targets[3, i] = target_states[3, i] + random.uniform(0, 1.0)
+        noisy_targets[3, i] = target_states[3, i]# + random.uniform(0, 1.0)
 
     car_system = Car()
     car_system.set_dt(dt)
@@ -42,7 +42,10 @@ def example_1():
     start_time = timeit.default_timer()
     myiLQR()
     elapsed = timeit.default_timer() - start_time
-    print("elapsed time: ", elapsed)
+    # print("elapsed time: ", elapsed)
+    plt.figure
+    plt.title('theta')
+    plt.plot(myiLQR.states[3, :], '--r', label='theta', linewidth=2)
 
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: 2D, x and y.  ')
@@ -60,9 +63,9 @@ def example_1():
     plt.ylabel('speed')
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: inputs vs. time.  ')
-    plt.plot(myiLQR.inputs[0, :], '-b',
+    plt.plot(myiLQR.inputs[0, :], '-r',
              linewidth=1.0, label='Acceleration')
-    plt.plot(myiLQR.inputs[1, :], '-r',
+    plt.plot(myiLQR.inputs[1, :], '-b',
              linewidth=1.0, label='turning rate')
     plt.ylabel('acceleration and turning rate input')
     plt.show()
