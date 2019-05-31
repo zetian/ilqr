@@ -34,8 +34,8 @@ def example_acc():
             np.sin(target_states[3, i-1])*dt*ref_vel[i - 1]
         target_states[2, i] = ref_vel[i]
         target_states[3, i] = target_states[3, i-1] + curv*dt
-        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
-        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
+        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 10.0)
+        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 10.0)
         noisy_targets[2, i] = target_states[2, i]
         noisy_targets[3, i] = target_states[3, i] + random.uniform(0, 1.0)
     
@@ -235,5 +235,5 @@ def example_constraints():
     constraint = CircleConstraintForCar(np.array([0, 40]), 10.0, car_system)
 
 if __name__ == '__main__':
-    example_jerk()
-    # example_acc()
+    # example_jerk()
+    example_acc()

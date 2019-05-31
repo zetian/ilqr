@@ -98,6 +98,7 @@ class iterative_LQR_quadratic_cost:
             u = self.inputs[:, i]
             x = self.states[:, i]
             df_du = self.system.compute_df_du(x, u)
+            # print("df_du", df_du)
             df_dx = self.system.compute_df_dx(x, u)
             dl_dx = 2.0*np.dot(self.Q, x - self.target_states[:, i])
             dl_du = 2.0*np.dot(self.R, u)

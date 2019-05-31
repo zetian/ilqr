@@ -27,6 +27,7 @@ class Car(System):
     def __init__(self):
         super().__init__(4, 2)
         self.dt = 0.2
+        self.control_bound = np.array([0.5, 5])
 
     def model_f(self, x, u):
         theta = x[3]

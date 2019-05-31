@@ -9,13 +9,13 @@ class CircleConstraintForCar:
 
     def evaluate_constraint(self, x):
         # evolve the system for one to evaluate constraint
-        x_next = self.system.transition(x, np.zeros(self.system.control_size))
+        x_next = self.system.model_f(x, np.zeros(self.system.control_size))
         length = (x_next[0] - self.center[0])**2 + (x_next[1] - self.center[1])**2
         return self.r**2 - length
 
     def evaluate_constraint_J(self, x):
         # evolve the system for one to evaluate constraint
-        x_next = self.system.transition(x, np.zeros(self.system.control_size))
+        x_next = self.system.model_f(x, np.zeros(self.system.control_size))
         result = np.zeros(x.shape)
         result[0] = -2*(x_next[0] - self.center[0])
         result[1] = -2*(x_next[1] - self.center[1])
