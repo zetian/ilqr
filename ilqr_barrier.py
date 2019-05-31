@@ -39,8 +39,8 @@ class iterative_LQR_quadratic_cost:
         self.inputs = np.zeros(
             (self.m_inputs, self.horizon - 1))
         self.obs_list = []
-        self.obstacle_weight = 100
-        self.obstacle_weight_2 = 9
+        self.obstacle_weight = 1000
+        self.obstacle_weight_2 = 10
 
     def set_obstacles(self, obs):
         self.obs_list = obs
@@ -192,8 +192,10 @@ class iterative_LQR_quadratic_cost:
 if __name__ == '__main__':
     obs_list = []
     obs_1 = [5, 40, 9]
+    obs_2 = [22, 78, 9]
     obs_list.append(obs_1)
-    ntimesteps = 100
+    obs_list.append(obs_2)
+    ntimesteps = 110
     target_states = np.zeros((4, ntimesteps))
     noisy_targets = np.zeros((4, ntimesteps))
     ref_vel = np.zeros(ntimesteps)
