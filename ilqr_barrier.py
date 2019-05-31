@@ -39,7 +39,8 @@ class iterative_LQR_quadratic_cost:
         self.inputs = np.zeros(
             (self.m_inputs, self.horizon - 1))
         self.obs_list = []
-        self.obstacle_weight = 0.09
+        self.obstacle_weight = 100
+        self.obstacle_weight_2 = 9
 
     def set_obstacles(self, obs):
         self.obs_list = obs
@@ -55,13 +56,13 @@ class iterative_LQR_quadratic_cost:
                 # if (self.state_sequence[0, i] - obs[0])**2 + (self.state_sequence[1, i] - obs[1])**2 - obs[2]**2 > 0:
                 #     print(np.exp (-( (self.state_sequence[0, i] - obs[0])**2 + (self.state_sequence[1, i] - obs[1])**2 - obs[2]**2 )*self.obstacle_weight))
             
-                cost += self.obstacle_weight*np.exp(self.obstacle_weight*(obs[2]**2 - (self.states[0, i] - obs[0])**2 - (self.states[1, i] - obs[1])**2))
+                cost += self.obstacle_weight*np.exp(self.obstacle_weight_2*(obs[2]**2 - (self.states[0, i] - obs[0])**2 - (self.states[1, i] - obs[1])**2))
 
         state = np.reshape(states_diff[:,-1], (-1,1))
         cost += np.dot(np.dot(state.T, self.Qf), state)
         for obs in self.obs_list:
                 # cost += self.obs_w*np.exp (-( (self.state_sequence[0, -1] - obs[0])**2 + (self.state_sequence[1, -1] - obs[1])**2 - obs[2]**2 )*self.obstacle_weight)
-                cost += self.obstacle_weight*np.exp(self.obstacle_weight*(obs[2]**2 - (self.states[0, -1] - obs[0])**2 - (self.states[1, -1] - obs[1])**2))
+                cost += self.obstacle_weight*np.exp(self.obstacle_weight_2*(obs[2]**2 - (self.states[0, -1] - obs[0])**2 - (self.states[1, -1] - obs[1])**2))
         return cost
 
     def compute_dl_dx(self, x, xr):
@@ -184,13 +185,13 @@ class iterative_LQR_quadratic_cost:
                 break
             self.backward_pass()
             self.forward_pass()
-        print(self.min_cost)
+        # print(self.min_cost)
         return self.states
 
 
 if __name__ == '__main__':
     obs_list = []
-    obs_1 = [5, 40, 10]
+    obs_1 = [5, 40, 9]
     obs_list.append(obs_1)
     ntimesteps = 100
     target_states = np.zeros((4, ntimesteps))
@@ -251,7 +252,7 @@ if __name__ == '__main__':
     plt.title('iLQR: 2D, x and y.  ')
     plt.axis('equal')
     plt.plot(noisy_targets[0, :],
-             noisy_targets[1, :], '--r', label='Target', linewidth=2)
+             noisy_targets[1, :], '--g', label='Target', linewidth=2)
     plt.plot(myiLQR.states[0, :], myiLQR.states[1, :],
              '-+b', label='iLQR', linewidth=1.0)
     for obs in obs_list:
@@ -260,6 +261,7 @@ if __name__ == '__main__':
         ax.add_artist(circle)
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
+    plt.legend()
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: state vs. time.  ')
     plt.plot(myiLQR.states[2, :], '-b', linewidth=1.0, label='speed')
@@ -272,4 +274,5 @@ if __name__ == '__main__':
     plt.plot(myiLQR.inputs[1, :], '-b',
              linewidth=1.0, label='turning rate')
     plt.ylabel('acceleration and turning rate input')
+    plt.legend()
     plt.show()

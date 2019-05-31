@@ -130,5 +130,5 @@ class iterative_LQR_quadratic_cost:
                 break
             self.backward_pass()
             self.forward_pass()
-        print(self.min_cost)
+        # print(self.min_cost)
         return self.states
