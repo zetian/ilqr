@@ -3,7 +3,6 @@ import random
 from matplotlib import pyplot as plt
 import timeit
 from systems import *
-from ilqr import iterative_LQR_quadratic_cost
 from constraints import CircleConstraintForCar
 
 "iterative LQR with Quadratic cost"
