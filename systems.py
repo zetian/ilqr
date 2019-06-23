@@ -42,8 +42,7 @@ class Car(System):
         theta = x[3]
         v = x[2]
         df_dx = np.array([[1.0, 0.0, np.cos(theta)*self.dt, -np.sin(theta)*v*self.dt],
-                          [0.0, 1.0, np.sin(theta)*self.dt,
-                           np.cos(theta)*v*self.dt],
+                          [0.0, 1.0, np.sin(theta)*self.dt, np.cos(theta)*v*self.dt],
                           [0.0, 0.0,  1.0, 0.0],
                           [0.0, 0.0,  0.0, 1.0]
                           ])

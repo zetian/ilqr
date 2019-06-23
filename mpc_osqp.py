@@ -3,7 +3,18 @@ import numpy as np
 import scipy as sp
 import scipy.sparse as sparse
 from scipy.linalg import block_diag
+# from scipy import linalg
 
+
+blocks = np.multiply.outer(np.arange(1,4), np.ones((2,2), int))
+print(blocks)
+offset = 3
+
+aux = np.empty((0, offset), int)
+print(aux.T)
+offset_matrix = block_diag(aux.T, *blocks, aux)
+# print(offset_matrix)
+print("~~~")
 # Discrete time model of a quadcopter
 # Ad = sparse.csc_matrix([
 #   [1.,      0.,     0., 0., 0., 0., 0.1,     0.,     0.,  0.,     0.,     0.    ],
@@ -21,10 +32,10 @@ from scipy.linalg import block_diag
 # ])
 
 Ad = sparse.csc_matrix([
-    [0, 0, 0.3, 0.7],
-    [0, 0, 0.7, -0.3],
-    [0, 0, 0, 0],
-    [0, 0, 0.5, 0]
+    [1.0, 0, 0.3, 0.7],
+    [0, 1.0, 0.7, -0.3],
+    [0, 0, 1.0, 0],
+    [0, 0, 0, 1.0]
 ])
 
 # Bd = sparse.csc_matrix([
@@ -69,7 +80,7 @@ QN = Q*10
 R = 10*sparse.eye(2)
 
 # Initial and reference states
-x0 = np.zeros(4)
+x0 = np.array([0.1, 0.1, 0.1, 0.1])
 xr = np.array([10, 10, 0, 0])
 
 # Prediction horizon
@@ -82,15 +93,40 @@ N = 2
 # print(P_test)
 P = sparse.block_diag([sparse.kron(sparse.eye(N), Q), QN,
                        sparse.kron(sparse.eye(N), R)]).tocsc()
+z = np.zeros((2,2))
+a = [[1, 2], [3, 4]]
+b = [[5, 6], [7, 8]]
+test = []
+test.append(a)
+test.append(b)
+offset = 2
+aux = np.empty((0, offset), int)
+print(aux.T)
+offset_matrix = block_diag(aux.T, *test, aux)
+offset_matrix = sparse.csr_matrix(offset_matrix)
+
+# c = sparse.block_diag((z.T, *test, z))
+print(offset_matrix)
+print("P: ")
 print(P)
 # - linear objective
 q = np.hstack([np.kron(np.ones(N), -Q.dot(xr)), -QN.dot(xr),
                np.zeros(N*nu)])
+print("q: ")
+print(q)
 # - linear dynamics
 Ax = sparse.kron(sparse.eye(N+1),-sparse.eye(nx)) + sparse.kron(sparse.eye(N+1, k=-1), Ad)
+print("Ax: ")
+print(Ax)
 Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, N)), sparse.eye(N)]), Bd)
+print("Bu: ")
+print(Bu)
 Aeq = sparse.hstack([Ax, Bu])
+print("Aeq: ")
+print(Aeq)
 leq = np.hstack([-x0, np.zeros(N*nx)])
+print("leq: ")
+print(leq)
 ueq = leq
 # - input and state constraints
 Aineq = sparse.eye((N+1)*nx + N*nu)
