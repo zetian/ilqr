@@ -1,150 +1,155 @@
 import osqp
+import random
 import numpy as np
 import scipy as sp
 import scipy.sparse as sparse
 from scipy.linalg import block_diag
+from systems import *
+from matplotlib import pyplot as plt
 # from scipy import linalg
+num_state = 4
+num_input = 2
+horizon = 80
 
+ntimesteps = horizon
+target_states = np.zeros((ntimesteps, 4))
+noisy_targets = np.zeros((ntimesteps, 4))
+ref_vel = np.zeros(ntimesteps)
+dt = 0.2
+curv = 0.1
+a = 1.5
+v_max = 11
 
-blocks = np.multiply.outer(np.arange(1,4), np.ones((2,2), int))
-print(blocks)
-offset = 3
+car_system = Car()
+car_system.set_dt(dt)
+car_system.set_cost(
+    np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([3000.0, 1000.0]))
+car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+init_inputs = np.zeros((ntimesteps - 1, car_system.control_size))
 
-aux = np.empty((0, offset), int)
-print(aux.T)
-offset_matrix = block_diag(aux.T, *blocks, aux)
-# print(offset_matrix)
-print("~~~")
-# Discrete time model of a quadcopter
-# Ad = sparse.csc_matrix([
-#   [1.,      0.,     0., 0., 0., 0., 0.1,     0.,     0.,  0.,     0.,     0.    ],
-#   [0.,      1.,     0., 0., 0., 0., 0.,      0.1,    0.,  0.,     0.,     0.    ],
-#   [0.,      0.,     1., 0., 0., 0., 0.,      0.,     0.1, 0.,     0.,     0.    ],
-#   [0.0488,  0.,     0., 1., 0., 0., 0.0016,  0.,     0.,  0.0992, 0.,     0.    ],
-#   [0.,     -0.0488, 0., 0., 1., 0., 0.,     -0.0016, 0.,  0.,     0.0992, 0.    ],
-#   [0.,      0.,     0., 0., 0., 1., 0.,      0.,     0.,  0.,     0.,     0.0992],
-#   [0.,      0.,     0., 0., 0., 0., 1.,      0.,     0.,  0.,     0.,     0.    ],
-#   [0.,      0.,     0., 0., 0., 0., 0.,      1.,     0.,  0.,     0.,     0.    ],
-#   [0.,      0.,     0., 0., 0., 0., 0.,      0.,     1.,  0.,     0.,     0.    ],
-#   [0.9734,  0.,     0., 0., 0., 0., 0.0488,  0.,     0.,  0.9846, 0.,     0.    ],
-#   [0.,     -0.9734, 0., 0., 0., 0., 0.,     -0.0488, 0.,  0.,     0.9846, 0.    ],
-#   [0.,      0.,     0., 0., 0., 0., 0.,      0.,     0.,  0.,     0.,     0.9846]
-# ])
+Q = sparse.diags([50.0, 50.0, 1000.0, 0.0])
+QN = Q
+R = sparse.diags([300.0, 10000.0])
 
-Ad = sparse.csc_matrix([
-    [1.0, 0, 0.3, 0.7],
-    [0, 1.0, 0.7, -0.3],
-    [0, 0, 1.0, 0],
-    [0, 0, 0, 1.0]
-])
+for i in range(40, ntimesteps):
+    if ref_vel[i - 1] > v_max:
+        a = 0
+    ref_vel[i] = ref_vel[i - 1] + a*dt
+for i in range(1, ntimesteps):
+    target_states[i, 0] = target_states[i-1, 0] + \
+        np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
+    target_states[i, 1] = target_states[i-1, 1] + \
+        np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
+    target_states[i, 2] = ref_vel[i]
+    target_states[i, 3] = target_states[i-1, 3] + curv*dt
+    noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 10.0)
+    noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 10.0)
+    noisy_targets[i, 2] = target_states[i, 2]
+    noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 1.0)
 
-# Bd = sparse.csc_matrix([
-#   [0.,      -0.0726,  0.,     0.0726],
-#   [-0.0726,  0.,      0.0726, 0.    ],
-#   [-0.0152,  0.0152, -0.0152, 0.0152],
-#   [-0.,     -0.0006, -0.,     0.0006],
-#   [0.0006,   0.,     -0.0006, 0.0000],
-#   [0.0106,   0.0106,  0.0106, 0.0106],
-#   [0,       -1.4512,  0.,     1.4512],
-#   [-1.4512,  0.,      1.4512, 0.    ],
-#   [-0.3049,  0.3049, -0.3049, 0.3049],
-#   [-0.,     -0.0236,  0.,     0.0236],
-#   [0.0236,   0.,     -0.0236, 0.    ],
-#   [0.2107,   0.2107,  0.2107, 0.2107]])
+for i in range(1, ntimesteps):
+    init_inputs[i - 1, 0] = (noisy_targets[i, 2] - noisy_targets[i - 1, 2])/dt
+    init_inputs[i - 1, 1] = (noisy_targets[i, 3] - noisy_targets[i - 1, 3])/dt
 
-Bd = sparse.csc_matrix([
-    [0, 0],
-    [0, 0],
-    [1, 0],
-    [0, 1]
-])
+num_sim = 10
 
+sim_states = noisy_targets
+sim_inputs = init_inputs
+# print(noisy_targets.shape)
+# res_x = []
+# res_y = []
+states = []
+for i in range(num_sim):
 
-[nx, nu] = Bd.shape
+    Ad = []
+    for i in range(ntimesteps - 1):
+        Ai = car_system.compute_df_dx(sim_states[i, :], sim_inputs[i, :])
+        Ad.append(Ai)
+    aux = np.empty((0, num_state), int)
+    Ax_offset = block_diag(aux.T, *Ad, aux)
+    Ax_offset = sparse.csr_matrix(Ax_offset)
 
-# Constraints
-u0 = 10.5916
-umin = np.array([-1.5, -0.3])
-umax = np.array([1.5, 0.3])
-# xmin = np.array([-np.pi/6,-np.pi/6,-np.inf,-np.inf,-np.inf,-1.,
-#                  -np.inf,-np.inf,-np.inf,-np.inf,-np.inf,-np.inf])
-xmin = np.array([-np.inf, -np.inf, 0, -np.pi/2])
+    Ax = sparse.kron(sparse.eye(ntimesteps),-sparse.eye(num_state)) + Ax_offset
+    Bd = sparse.csc_matrix([
+        [0, 0],
+        [0, 0],
+        [0.2, 0],
+        [0, 0.2]
+    ])
+    Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, ntimesteps - 1)), sparse.eye(ntimesteps - 1)]), Bd)
+    Aeq = sparse.hstack([Ax, Bu])
+    P = sparse.block_diag([sparse.kron(sparse.eye(ntimesteps - 1), Q), QN,
+                        sparse.kron(sparse.eye(ntimesteps - 1), R)]).tocsc()
+    # print("P: ")
+    # print(P.shape)
+    q = -Q.dot(noisy_targets[0, :])
+    for i in range(1, ntimesteps - 1):
+        q = np.hstack([q, -Q.dot(noisy_targets[i, :])])
+    q = np.hstack([q, -Q.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
+    # print("q: ")
+    # print(q.shape)
+    umin = np.array([-1.5, -0.3])
+    umax = np.array([1.5, 0.3])
+    xmin = np.array([-np.inf, -np.inf, 0, -np.pi/2])
 
-# xmax = np.array([ np.pi/6, np.pi/6, np.inf, np.inf, np.inf, np.inf,
-#                   np.inf, np.inf, np.inf, np.inf, np.inf, np.inf])
-xmax = np.array([np.inf, np.inf, 10, np.pi/2])
-# Objective function
-# Q = sparse.diags([0., 0., 10., 10., 10., 10., 0., 0., 0., 5., 5., 5.])
-Q = sparse.diags([10, 10, 10, 100])
-QN = Q*10
-R = 10*sparse.eye(2)
+    xmax = np.array([np.inf, np.inf, 10, np.pi/2])
+    x0 = noisy_targets[0, :]
+    leq = np.hstack([-x0, np.zeros((ntimesteps - 1)*num_state)])
+    # print("leq: ")
+    # print(leq.shape)
+    ueq = leq
+    Aineq = sparse.eye(ntimesteps*num_state + (ntimesteps - 1)*num_input)
+    lineq = np.hstack([np.kron(np.ones(ntimesteps), xmin), np.kron(np.ones(ntimesteps - 1), umin)])
+    uineq = np.hstack([np.kron(np.ones(ntimesteps), xmax), np.kron(np.ones(ntimesteps - 1), umax)])
 
-# Initial and reference states
-x0 = np.array([0.1, 0.1, 0.1, 0.1])
-xr = np.array([10, 10, 0, 0])
+    A = sparse.vstack([Aeq, Aineq]).tocsc()
+    # print("A: ")
+    # print(A.shape)
+    l = np.hstack([leq, lineq])
+    # print("l: ")
+    # print(l.shape)
+    u = np.hstack([ueq, uineq])
+    # print("u: ")
+    # print(u.shape)
 
-# Prediction horizon
-N = 2
+    # Create an OSQP object
+    prob = osqp.OSQP()
 
-# Cast MPC problem to a QP: x = (x(0),x(1),...,x(N),u(0),...,u(N-1))
-# - quadratic objective
-# P_test = block_diag([np.kron(np.eye(N), Q), QN,
-#                        np.kron(np.eye(N), R)])
-# print(P_test)
-P = sparse.block_diag([sparse.kron(sparse.eye(N), Q), QN,
-                       sparse.kron(sparse.eye(N), R)]).tocsc()
-z = np.zeros((2,2))
-a = [[1, 2], [3, 4]]
-b = [[5, 6], [7, 8]]
-test = []
-test.append(a)
-test.append(b)
-offset = 2
-aux = np.empty((0, offset), int)
-print(aux.T)
-offset_matrix = block_diag(aux.T, *test, aux)
-offset_matrix = sparse.csr_matrix(offset_matrix)
+    # Setup workspace
+    prob.setup(P, q, A, l, u, warm_start=True, verbose=False)
+    res = prob.solve()
+    # print(len(res.x))
+    states = res.x[0: ntimesteps*num_state]
+    inputs = res.x[ntimesteps*num_state:]
+    inputs = np.reshape(inputs, (-1, 2))
+    states = np.reshape(states, (-1, 4))
+    # print(states[10, :])
+    # print(states.shape)
+    sim_states = states
+    sim_inputs = inputs
+    # print(states)
+    # print(inputs[0, :])
+    # res_x = []
+    # res_y = []
+    # for state in states:
+    #     res_x.append(state[0])
+    #     res_y.append(state[1])
 
-# c = sparse.block_diag((z.T, *test, z))
-print(offset_matrix)
-print("P: ")
-print(P)
-# - linear objective
-q = np.hstack([np.kron(np.ones(N), -Q.dot(xr)), -QN.dot(xr),
-               np.zeros(N*nu)])
-print("q: ")
-print(q)
-# - linear dynamics
-Ax = sparse.kron(sparse.eye(N+1),-sparse.eye(nx)) + sparse.kron(sparse.eye(N+1, k=-1), Ad)
-print("Ax: ")
-print(Ax)
-Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, N)), sparse.eye(N)]), Bd)
-print("Bu: ")
-print(Bu)
-Aeq = sparse.hstack([Ax, Bu])
-print("Aeq: ")
-print(Aeq)
-leq = np.hstack([-x0, np.zeros(N*nx)])
-print("leq: ")
-print(leq)
-ueq = leq
-# - input and state constraints
-Aineq = sparse.eye((N+1)*nx + N*nu)
-lineq = np.hstack([np.kron(np.ones(N+1), xmin), np.kron(np.ones(N), umin)])
-uineq = np.hstack([np.kron(np.ones(N+1), xmax), np.kron(np.ones(N), umax)])
-# - OSQP constraints
-A = sparse.vstack([Aeq, Aineq]).tocsc()
-l = np.hstack([leq, lineq])
-u = np.hstack([ueq, uineq])
+# print(states[:, 0])
 
-# Create an OSQP object
-# prob = osqp.OSQP()
+plt.figure(figsize=(8*1.1, 6*1.1))
+plt.title('MPC: 2D, x and y.  ')
+plt.axis('equal')
+plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewidth=2)
+plt.plot(states[:, 0], states[:, 1], '-+b', label='MPC', linewidth=1.0)
+plt.xlabel('x (meters)')
+plt.ylabel('y (meters)')
+plt.show()
+# for i in range(len(res.x)):
 
-# Setup workspace
-# prob.setup(P, q, A, l, u, warm_start=True)
 
 # Simulate in closed loop
-nsim = 15
+# nsim = 15
 # for i in range(nsim):
 #     # Solve
 #     res = prob.solve()
