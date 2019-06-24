@@ -1,12 +1,24 @@
 import osqp
+import time
 import random
 import numpy as np
 import scipy as sp
 import scipy.sparse as sparse
 from scipy.linalg import block_diag
-from systems import *
+# from systems import *
 from matplotlib import pyplot as plt
 # from scipy import linalg
+def compute_df_dx(x, u, dt):
+    theta = x[3]
+    v = x[2]
+    df_dx = np.array([[1.0, 0.0, np.cos(theta)*dt, -np.sin(theta)*v*dt],
+                        [0.0, 1.0, np.sin(theta)*dt, np.cos(theta)*v*dt],
+                        [0.0, 0.0,  1.0, 0.0],
+                        [0.0, 0.0,  0.0, 1.0]
+                        ])
+    return df_dx
+
+eps = 1e-7
 num_state = 4
 num_input = 2
 horizon = 80
@@ -14,22 +26,24 @@ horizon = 80
 ntimesteps = horizon
 target_states = np.zeros((ntimesteps, 4))
 noisy_targets = np.zeros((ntimesteps, 4))
+# noisy_targets[0, 2] = 1
+# target_states[0, 2] = 1
 ref_vel = np.zeros(ntimesteps)
 dt = 0.2
 curv = 0.1
 a = 1.5
 v_max = 11
 
-car_system = Car()
-car_system.set_dt(dt)
-car_system.set_cost(
-    np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([30.0, 1000.0]))
-car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
-init_inputs = np.zeros((ntimesteps - 1, car_system.control_size))
+# car_system = Car()
+# car_system.set_dt(dt)
+# car_system.set_cost(
+#     np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([30.0, 1000.0]))
+# car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+init_inputs = np.zeros((ntimesteps - 1, num_input))
 
 Q = sparse.diags([50.0, 50.0, 1000.0, 0.0])
 QN = Q*100
-R = sparse.diags([300.0, 10000.0])
+R = sparse.diags([300.0, 50000.0])
 
 for i in range(40, ntimesteps):
     if ref_vel[i - 1] > v_max:
@@ -42,16 +56,16 @@ for i in range(1, ntimesteps):
         np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
     target_states[i, 2] = ref_vel[i]
     target_states[i, 3] = target_states[i-1, 3] + curv*dt
-    noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 10.0)
-    noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 10.0)
-    noisy_targets[i, 2] = target_states[i, 2]
-    noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 1.0)
+    noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 1.0)
+    noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 1.0)
+    noisy_targets[i, 2] = ref_vel[i]
+    noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
 
 for i in range(1, ntimesteps):
     init_inputs[i - 1, 0] = (noisy_targets[i, 2] - noisy_targets[i - 1, 2])/dt
     init_inputs[i - 1, 1] = (noisy_targets[i, 3] - noisy_targets[i - 1, 3])/dt
 
-num_sim = 10
+num_sim = 50
 
 sim_states = noisy_targets
 sim_inputs = init_inputs
@@ -59,11 +73,12 @@ sim_inputs = init_inputs
 # res_x = []
 # res_y = []
 states = []
+last_cost = 0
+start = time.time()
 for i in range(num_sim):
-
     Ad = []
     for i in range(ntimesteps - 1):
-        Ai = car_system.compute_df_dx(sim_states[i, :], sim_inputs[i, :])
+        Ai = compute_df_dx(sim_states[i, :], sim_inputs[i, :], dt)
         Ad.append(Ai)
     aux = np.empty((0, num_state), int)
     Ax_offset = block_diag(aux.T, *Ad, aux)
@@ -94,6 +109,7 @@ for i in range(num_sim):
 
     xmax = np.array([np.inf, np.inf, 10, np.pi/2])
     x0 = noisy_targets[0, :]
+    # print(x0)
     leq = np.hstack([-x0, np.zeros((ntimesteps - 1)*num_state)])
     # print("leq: ")
     # print(leq.shape)
@@ -119,7 +135,10 @@ for i in range(num_sim):
     prob.setup(P, q, A, l, u, warm_start=True, verbose=False)
     res = prob.solve()
     # obj_val = prob.obj_val()
-    print(res.info.obj_val)
+    if abs(1 - last_cost/res.info.obj_val < eps):
+        break
+    last_cost = res.info.obj_val
+    # print(res.info.obj_val)
     # print(len(res.x))
     states = res.x[0: ntimesteps*num_state]
     inputs = res.x[ntimesteps*num_state:]
@@ -138,7 +157,8 @@ for i in range(num_sim):
     #     res_y.append(state[1])
 
 # print(states[:, 0])
-
+end = time.time()
+print(end - start)
 plt.figure(figsize=(8*1.1, 6*1.1))
 plt.title('MPC: 2D, x and y.  ')
 plt.axis('equal')
@@ -152,24 +172,4 @@ plt.plot(states[:, 2], '-b', linewidth=1.0, label='speed')
 plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
 plt.ylabel('speed')
 plt.show()
-# for i in range(len(res.x)):
 
-
-# Simulate in closed loop
-# nsim = 15
-# for i in range(nsim):
-#     # Solve
-#     res = prob.solve()
-
-#     # Check solver status
-#     if res.info.status != 'solved':
-#         raise ValueError('OSQP did not solve the problem!')
-
-#     # Apply first control input to the plant
-#     ctrl = res.x[-N*nu:-(N-1)*nu]
-#     x0 = Ad.dot(x0) + Bd.dot(ctrl)
-
-#     # Update initial state
-#     l[:nx] = -x0
-#     u[:nx] = -x0
-#     prob.update(l=l, u=u)
