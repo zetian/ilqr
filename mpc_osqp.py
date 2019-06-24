@@ -23,12 +23,12 @@ v_max = 11
 car_system = Car()
 car_system.set_dt(dt)
 car_system.set_cost(
-    np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([3000.0, 1000.0]))
+    np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([30.0, 1000.0]))
 car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
 init_inputs = np.zeros((ntimesteps - 1, car_system.control_size))
 
 Q = sparse.diags([50.0, 50.0, 1000.0, 0.0])
-QN = Q
+QN = Q*100
 R = sparse.diags([300.0, 10000.0])
 
 for i in range(40, ntimesteps):
@@ -85,7 +85,7 @@ for i in range(num_sim):
     q = -Q.dot(noisy_targets[0, :])
     for i in range(1, ntimesteps - 1):
         q = np.hstack([q, -Q.dot(noisy_targets[i, :])])
-    q = np.hstack([q, -Q.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
+    q = np.hstack([q, -QN.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
     # print("q: ")
     # print(q.shape)
     umin = np.array([-1.5, -0.3])
@@ -118,6 +118,8 @@ for i in range(num_sim):
     # Setup workspace
     prob.setup(P, q, A, l, u, warm_start=True, verbose=False)
     res = prob.solve()
+    # obj_val = prob.obj_val()
+    print(res.info.obj_val)
     # print(len(res.x))
     states = res.x[0: ntimesteps*num_state]
     inputs = res.x[ntimesteps*num_state:]
@@ -144,6 +146,11 @@ plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewi
 plt.plot(states[:, 0], states[:, 1], '-+b', label='MPC', linewidth=1.0)
 plt.xlabel('x (meters)')
 plt.ylabel('y (meters)')
+plt.figure(figsize=(8*1.1, 6*1.1))
+plt.title('iLQR: state vs. time.  ')
+plt.plot(states[:, 2], '-b', linewidth=1.0, label='speed')
+plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+plt.ylabel('speed')
 plt.show()
 # for i in range(len(res.x)):
 
