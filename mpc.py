@@ -5,18 +5,8 @@ import numpy as np
 import scipy as sp
 import scipy.sparse as sparse
 from scipy.linalg import block_diag
-# from systems import *
+from systems import *
 from matplotlib import pyplot as plt
-# from scipy import linalg
-def compute_df_dx(x, u, dt):
-    theta = x[3]
-    v = x[2]
-    df_dx = np.array([[1.0, 0.0, np.cos(theta)*dt, -np.sin(theta)*v*dt],
-                        [0.0, 1.0, np.sin(theta)*dt, np.cos(theta)*v*dt],
-                        [0.0, 0.0,  1.0, 0.0],
-                        [0.0, 0.0,  0.0, 1.0]
-                        ])
-    return df_dx
 
 eps = 1e-3
 num_state = 4
@@ -34,16 +24,16 @@ curv = 0.1
 a = 1.5
 v_max = 11
 
-# car_system = Car()
-# car_system.set_dt(dt)
-# car_system.set_cost(
-#     np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([30.0, 1000.0]))
-# car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+system = Car()
+system.set_dt(dt)
+system.set_cost(
+    np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([30.0, 1000.0]))
+system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
 init_inputs = np.zeros((ntimesteps - 1, num_input))
 
 Q = sparse.diags([50.0, 50.0, 1000.0, 0.0])
-QN = Q*100
-R = sparse.diags([30.0, 50000.0])
+QN = Q*40
+R = sparse.diags([30.0, 5000.0])
 
 # for i in range(40, ntimesteps):
 #     if ref_vel[i - 1] > v_max:
@@ -113,12 +103,32 @@ uineq = np.hstack([np.kron(np.ones(ntimesteps), xmax), np.kron(np.ones(ntimestep
 #     [0, 0.2]
 # ])
 # Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, ntimesteps - 1)), sparse.eye(ntimesteps - 1)]), Bd)
+P = sparse.block_diag([sparse.kron(sparse.eye(ntimesteps - 1), Q), QN,
+                    sparse.kron(sparse.eye(ntimesteps - 1), R)]).tocsc()
+# print("P: ")
+# print(P.shape)
+q = -Q.dot(noisy_targets[0, :])
+for i in range(1, ntimesteps - 1):
+    q = np.hstack([q, -Q.dot(noisy_targets[i, :])])
+q = np.hstack([q, -QN.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
 
+x0 = noisy_targets[0, :]
+
+leq = np.hstack([-x0, np.zeros((ntimesteps - 1)*num_state)])
+# print("leq: ")
+# print(leq.shape)
+ueq = leq
+Aineq = sparse.eye(ntimesteps*num_state + (ntimesteps - 1)*num_input)
+
+l = np.hstack([leq, lineq])
+# print("l: ")
+# print(l.shape)
+u = np.hstack([ueq, uineq])
 for i in range(num_sim):
     cnt += 1
     Ad = []
     for i in range(ntimesteps - 1):
-        Ai = compute_df_dx(sim_states[i, :], sim_inputs[i, :], dt)
+        Ai = system.compute_df_dx(sim_states[i, :], sim_inputs[i, :])
         Ad.append(Ai)
     aux = np.empty((0, num_state), int)
     Ax_offset = block_diag(aux.T, *Ad, aux)
@@ -133,14 +143,14 @@ for i in range(num_sim):
     ])
     Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, ntimesteps - 1)), sparse.eye(ntimesteps - 1)]), Bd)
     Aeq = sparse.hstack([Ax, Bu])
-    P = sparse.block_diag([sparse.kron(sparse.eye(ntimesteps - 1), Q), QN,
-                        sparse.kron(sparse.eye(ntimesteps - 1), R)]).tocsc()
-    # print("P: ")
-    # print(P.shape)
-    q = -Q.dot(noisy_targets[0, :])
-    for i in range(1, ntimesteps - 1):
-        q = np.hstack([q, -Q.dot(noisy_targets[i, :])])
-    q = np.hstack([q, -QN.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
+    # P = sparse.block_diag([sparse.kron(sparse.eye(ntimesteps - 1), Q), QN,
+    #                     sparse.kron(sparse.eye(ntimesteps - 1), R)]).tocsc()
+    # # print("P: ")
+    # # print(P.shape)
+    # q = -Q.dot(noisy_targets[0, :])
+    # for i in range(1, ntimesteps - 1):
+    #     q = np.hstack([q, -Q.dot(noisy_targets[i, :])])
+    # q = np.hstack([q, -QN.dot(noisy_targets[-1, :]), np.zeros((ntimesteps - 1)*num_input)])
     # print("q: ")
     # print(q.shape)
     # umin = np.array([-1.5, -0.3])
@@ -151,23 +161,23 @@ for i in range(num_sim):
 
     # xmin = np.array([-2, -2, -1, -np.pi/2])
     # xmax = np.array([20, 20, 10, np.pi/2])
-    x0 = noisy_targets[0, :]
+    # x0 = noisy_targets[0, :]
     # print(x0)
-    leq = np.hstack([-x0, np.zeros((ntimesteps - 1)*num_state)])
-    # print("leq: ")
-    # print(leq.shape)
-    ueq = leq
-    Aineq = sparse.eye(ntimesteps*num_state + (ntimesteps - 1)*num_input)
+    # leq = np.hstack([-x0, np.zeros((ntimesteps - 1)*num_state)])
+    # # print("leq: ")
+    # # print(leq.shape)
+    # ueq = leq
+    # Aineq = sparse.eye(ntimesteps*num_state + (ntimesteps - 1)*num_input)
     # lineq = np.hstack([np.kron(np.ones(ntimesteps), xmin), np.kron(np.ones(ntimesteps - 1), umin)])
     # uineq = np.hstack([np.kron(np.ones(ntimesteps), xmax), np.kron(np.ones(ntimesteps - 1), umax)])
 
     A = sparse.vstack([Aeq, Aineq]).tocsc()
     # print("A: ")
     # print(A.shape)
-    l = np.hstack([leq, lineq])
-    # print("l: ")
-    # print(l.shape)
-    u = np.hstack([ueq, uineq])
+    # l = np.hstack([leq, lineq])
+    # # print("l: ")
+    # # print(l.shape)
+    # u = np.hstack([ueq, uineq])
     # print("u: ")
     # print(u.shape)
 
@@ -178,10 +188,11 @@ for i in range(num_sim):
     prob.setup(P, q, A, l, u, warm_start=True, verbose=False)
     res = prob.solve()
     # obj_val = prob.obj_val()
+    print(res.info.obj_val)
     if abs(1 - last_cost/res.info.obj_val) < eps:
         break
     last_cost = res.info.obj_val
-    # print(res.info.obj_val)
+    
     # print(len(res.x))
     states = res.x[0: ntimesteps*num_state]
     inputs = res.x[ntimesteps*num_state:]
