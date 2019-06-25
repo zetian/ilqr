@@ -21,7 +21,7 @@ def compute_df_dx(x, u, dt):
 eps = 1e-3
 num_state = 4
 num_input = 2
-horizon = 80
+horizon = 200
 
 ntimesteps = horizon
 target_states = np.zeros((ntimesteps, 4))
