@@ -13,7 +13,7 @@ class System:
     def set_cost(self, Q, R):
         self.Q = Q
         self.R = R
-        self.Q_f = Q*100000
+        self.Q_f = Q*1000
 
     def set_final_cost(self, Q_f):
         self.Q_f = Q_f
@@ -56,12 +56,17 @@ class Car(System):
         return df_du
     def get_A(self, x, u):
         theta = x[3]
-        v = x[2]
-        A = np.array([[1.0, 0.0, v*np.cos(theta)*self.dt, 0.0],
-                        [0.0, 1.0, v*np.sin(theta)*self.dt, 0.0],
+        # v = x[2]
+        A = np.array([[1.0, 0.0, np.cos(theta)*self.dt, 0.0],
+                        [0.0, 1.0, np.sin(theta)*self.dt, 0.0],
                         [0.0, 0.0,  1.0, 0.0],
                         [0.0, 0.0,  0.0, 1.0]
                         ])
+        # A = np.array([[1.0, 0.0, 0.2, 0.0],
+        #             [0.0, 1.0, 0.2, 0.0],
+        #             [0.0, 0.0,  1.0, 0.0],
+        #             [0.0, 0.0,  0.0, 1.0]
+        #             ])
         return A
 
 class CarAcceleration(System):

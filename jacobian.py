@@ -21,7 +21,7 @@ class iterative_MPC_optimizer:
         self.Q = sys.Q
         self.R = sys.R
         self.Qf = sys.Q_f
-        self.maxIter = 1
+        self.maxIter = 10
         self.min_cost = 0.0
         self.LM_parameter = 0.0
         # self.states = np.zeros((self.n_states, self.horizon))
@@ -216,7 +216,7 @@ v_max = 11
 
 system = Car()
 system.set_dt(dt)
-system.set_cost(np.diag([50.0, 50.0, 10.0, 0.0]), np.diag([30.0, 1000000000.0]))
+system.set_cost(np.diag([50.0, 50.0, 10.0, 1.0]), np.diag([30.0, 100000.0]))
 system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
 init_inputs = np.zeros((ntimesteps - 1, num_input))
 
