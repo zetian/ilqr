@@ -46,6 +46,21 @@ class iterative_MPC_optimizer:
             states[i + 1, :] = self.system.model_f(states[i], inputs[i])
         return states
     
+    def plot(self):
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('MPC: 2D, x and y.  ')
+        plt.axis('equal')
+        plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewidth=2)
+        plt.plot(self.states[:, 0], self.states[:, 1], '-+b', label='MPC', linewidth=1.0)
+        plt.xlabel('x (meters)')
+        plt.ylabel('y (meters)')
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('iLQR: state vs. time.  ')
+        plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
+        plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+        plt.ylabel('speed')
+        plt.show()
+    
     def __call__(self):
         P = sparse.block_diag([sparse.kron(sparse.eye(self.horizon - 1), self.Q), self.Qf,
                             sparse.kron(sparse.eye(self.horizon - 1), self.R)]).tocsc()
@@ -54,8 +69,16 @@ class iterative_MPC_optimizer:
             q = np.hstack([q, -self.Q.dot(self.target_states[i, :])])
         q = np.hstack([q, -self.Qf.dot(self.target_states[-1, :]), np.zeros((self.horizon - 1)*self.m_inputs)])
 
-        umin = np.array([-1.5, -0.18])
-        umax = np.array([1.5, 0.18])
+        umin = np.ones(self.m_inputs)
+        umax = np.ones(self.m_inputs)
+        if self.system.control_limited:
+            for i in range(self.m_inputs):
+                umin[i] = self.system.control_limit[i, 0]
+                umax[i] = self.system.control_limit[i, 1]
+        else:
+            umin = -umin*np.inf
+            umax = umax*np.inf
+        
         xmin = np.array([-np.inf, -np.inf, 0, -np.inf])
         xmax = np.array([np.inf, np.inf, 15, np.inf])
         lineq = np.hstack([np.kron(np.ones(self.horizon), xmin), np.kron(np.ones(self.horizon - 1), umin)])
@@ -123,10 +146,10 @@ horizon = 80
 ntimesteps = horizon
 target_states = np.zeros((ntimesteps, 4))
 noisy_targets = np.zeros((ntimesteps, 4))
-# noisy_targets[0, 2] = 1
-# target_states[0, 2] = 1
-# ref_vel = np.ones(ntimesteps)
-ref_vel = np.zeros(ntimesteps)
+noisy_targets[0, 2] = 1
+target_states[0, 2] = 1
+ref_vel = np.ones(ntimesteps)
+# ref_vel = np.zeros(ntimesteps)
 dt = 0.2
 curv = 0.1
 a = 1.5
@@ -136,20 +159,18 @@ system = Car()
 system.set_dt(dt)
 system.set_cost(np.diag([50.0, 50.0, 10.0, 1.0]), np.diag([300.0, 1000.0]))
 system.Q_f = system.Q*horizon*50
-system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+system.set_control_limit(np.array([[-1.5, 1.5], [-0.18, 0.18]]))
 init_inputs = np.zeros((ntimesteps - 1, num_input))
 
 
-for i in range(40, ntimesteps):
-    if ref_vel[i - 1] > v_max:
-        a = 0
-    ref_vel[i] = ref_vel[i - 1] + a*dt
+# for i in range(40, ntimesteps):
+#     if ref_vel[i - 1] > v_max:
+#         a = 0
+#     ref_vel[i] = ref_vel[i - 1] + a*dt
 
 for i in range(1, ntimesteps):
-    target_states[i, 0] = target_states[i-1, 0] + \
-        np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
-    target_states[i, 1] = target_states[i-1, 1] + \
-        np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
+    target_states[i, 0] = target_states[i-1, 0] + np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
+    target_states[i, 1] = target_states[i-1, 1] + np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
     target_states[i, 2] = ref_vel[i]
     target_states[i, 3] = target_states[i-1, 3] + curv*dt
     noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 1)
@@ -195,25 +216,26 @@ start = time.time()
 mpc_optimizer= iterative_MPC_optimizer(system, noisy_targets, dt)
 mpc_optimizer.inputs = init_inputs
 mpc_optimizer()
+mpc_optimizer.plot()
 
 
 # print(states[:, 0])
 end = time.time()
 print("Computation time: ", end - start)
 # print(cnt)
-plt.figure(figsize=(8*1.1, 6*1.1))
-plt.title('MPC: 2D, x and y.  ')
-plt.axis('equal')
-plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewidth=2)
-plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1], '-+b', label='MPC', linewidth=1.0)
-plt.xlabel('x (meters)')
-plt.ylabel('y (meters)')
-plt.figure(figsize=(8*1.1, 6*1.1))
-plt.title('iLQR: state vs. time.  ')
-plt.plot(mpc_optimizer.states[:, 2], '-b', linewidth=1.0, label='speed')
-plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
-plt.ylabel('speed')
-plt.show()
+# plt.figure(figsize=(8*1.1, 6*1.1))
+# plt.title('MPC: 2D, x and y.  ')
+# plt.axis('equal')
+# plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewidth=2)
+# plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1], '-+b', label='MPC', linewidth=1.0)
+# plt.xlabel('x (meters)')
+# plt.ylabel('y (meters)')
+# plt.figure(figsize=(8*1.1, 6*1.1))
+# plt.title('iLQR: state vs. time.  ')
+# plt.plot(mpc_optimizer.states[:, 2], '-b', linewidth=1.0, label='speed')
+# plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+# plt.ylabel('speed')
+# plt.show()
 
 
 
