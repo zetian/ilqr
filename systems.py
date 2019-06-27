@@ -13,7 +13,7 @@ class System:
     def set_cost(self, Q, R):
         self.Q = Q
         self.R = R
-        self.Q_f = Q*1000
+        self.Q_f = Q*10
 
     def set_final_cost(self, Q_f):
         self.Q_f = Q_f
