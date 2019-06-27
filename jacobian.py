@@ -88,21 +88,25 @@ class iterative_MPC_optimizer:
         self.min_cost = np.inf
         for iter in range(self.maxIter):
             Ad = []
+            Bd = []
             for i in range(self.horizon - 1):
                 Ai = system.compute_df_dx(self.states[i, :], self.inputs[i, :])
+                Bi = system.compute_df_du(self.states[i, :], self.inputs[i, :])
                 Ad.append(Ai)
+                Bd.append(Bi)
+            Bu = sparse.csr_matrix(block_diag(*Bd))
             Ax = sparse.csr_matrix(block_diag(*Ad))
             off_set = np.zeros(((self.horizon - 1)*self.n_states, self.n_states))
             Ax = sparse.hstack([Ax, off_set])
             Ax_offset = np.hstack([off_set, -np.eye(self.n_states*(self.horizon - 1))])
             Ax = Ax_offset + Ax
-            Bd = np.array([
-                [0, 0],
-                [0, 0],
-                [self.dt, 0],
-                [0, self.dt]
-            ])
-            Bu = sparse.kron(sparse.eye(self.horizon - 1), sparse.csr_matrix(Bd))
+            # Bd = np.array([
+            #     [0, 0],
+            #     [0, 0],
+            #     [self.dt, 0],
+            #     [0, self.dt]
+            # ])
+            # Bu = sparse.kron(sparse.eye(self.horizon - 1), sparse.csr_matrix(Bd))
             Aeq = sparse.hstack([Ax, Bu])
             init = np.zeros((self.n_states, Aeq.shape[1]))
             for i in range(self.n_states):
@@ -114,7 +118,7 @@ class iterative_MPC_optimizer:
             leq = []
             leq.extend(self.target_states[0, :])
             for i in range(0, self.horizon - 1):
-                d = -self.states[i + 1, :] + np.dot(Ad[i], self.states[i, :]) + np.dot(Bd, self.inputs[i, :])
+                d = -self.states[i + 1, :] + np.dot(Ad[i], self.states[i, :]) + np.dot(Bd[i], self.inputs[i, :])
                 leq.extend(d)
             ueq = leq
             l = np.hstack([leq, lineq])
