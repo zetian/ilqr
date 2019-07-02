@@ -22,12 +22,15 @@ class iterative_MPC_optimizer:
         self.Q = sys.Q
         self.R = sys.R
         self.Qf = sys.Q_f
-        self.maxIter = 20
+        self.maxIter = 50
         self.min_cost = 0.0
         self.LM_parameter = 0.0
         self.eps = 1e-3
         self.states = np.zeros((self.horizon, self.n_states))
         self.inputs = np.zeros((self.horizon - 1, self.m_inputs))
+        self.u0 = self.inputs[0, :]
+        self.init_input_fixed = False
+        self.x0 = self.target_states[0, :]
         self.xmax = np.full((self.horizon, self.n_states), np.inf)
         self.xmin = np.full((self.horizon, self.n_states), -np.inf)
 
@@ -53,6 +56,10 @@ class iterative_MPC_optimizer:
         self.xmax = xmax
         self.xmin = xmin
     
+    def set_init_inputs(self, init_inputs):
+        self.inputs = init_inputs
+        self.u0 = init_inputs[0, :]
+    
     def plot(self):
         plt.figure(figsize=(8*1.1, 6*1.1))
         currentAxis = plt.gca()
@@ -68,15 +75,15 @@ class iterative_MPC_optimizer:
             y = self.xmin[i, 1]
             size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
             currentAxis.add_patch(Rectangle((x, y), size_x, size_y, alpha=1))
-        # plt.figure(figsize=(8*1.1, 6*1.1))
-        # plt.title('iLQR: state vs. time.  ')
-        # plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
-        # plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
-        # plt.ylabel('speed')
-        # plt.figure(figsize=(8*1.1, 6*1.1))
-        # plt.title('iLQR: input vs. time.  ')
-        # plt.plot(self.inputs[:, 1], '-b', linewidth=1.0, label='turning rate')
-        # plt.ylabel('inputs')
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('iLQR: state vs. time.  ')
+        plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
+        plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+        plt.ylabel('speed')
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('iLQR: input vs. time.  ')
+        plt.plot(self.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
+        plt.ylabel('inputs')
         plt.show()
     
     def __call__(self):
@@ -126,15 +133,23 @@ class iterative_MPC_optimizer:
             # ])
             # Bu = sparse.kron(sparse.eye(self.horizon - 1), sparse.csr_matrix(Bd))
             Aeq = sparse.hstack([Ax, Bu])
-            init = np.zeros((self.n_states, Aeq.shape[1]))
+            init_x = np.zeros((self.n_states, Aeq.shape[1]))
+            init_u = np.zeros((self.m_inputs, Aeq.shape[1]))
             for i in range(self.n_states):
-                init[i, i] = 1
-            Aeq = sparse.vstack([init, Aeq])
+                init_x[i, i] = 1
+            for i in range(self.m_inputs):
+                init_u[i, self.horizon*self.n_states + i] = 1
+            if self.init_input_fixed:
+                Aeq = sparse.vstack([init_x, init_u, Aeq])
+            else:
+                Aeq = sparse.vstack([init_x, Aeq])
             Aineq = sparse.eye(self.horizon*self.n_states + (self.horizon - 1)*self.m_inputs)
             A = sparse.vstack([Aeq, Aineq]).tocsc()
 
             leq = []
-            leq.extend(self.target_states[0, :])
+            leq.extend(self.x0)
+            if self.init_input_fixed:
+                leq.extend(self.u0)
             for i in range(0, self.horizon - 1):
                 d = -self.states[i + 1, :] + np.dot(Ad[i], self.states[i, :]) + np.dot(Bd[i], self.inputs[i, :])
                 leq.extend(d)
@@ -150,7 +165,7 @@ class iterative_MPC_optimizer:
             inputs = res.x[self.horizon*self.n_states:]
             # self.states = np.reshape(states, (-1, 4))
             self.inputs = np.reshape(inputs, (-1, 2))
-            self.states = self.sim(self.target_states[0, :], self.inputs)
+            self.states = self.sim(self.x0, self.inputs)
             cost = self.cost()
             print("cost: ", cost)
             if abs(1 - cost/self.min_cost) < self.eps: # or cost > self.min_cost:
@@ -183,7 +198,8 @@ system = Car()
 system.set_dt(dt)
 system.set_cost(np.diag([50.0, 50.0, 10.0, 1.0]), np.diag([300.0, 1000.0]))
 system.Q_f = system.Q*horizon/100#*50
-system.set_control_limit(np.array([[-1, 1], [-0.2, 0.2]]))
+system.set_control_limit(np.array([[-10, 10], [-2, 2]]))
+# system.control_limited = False
 init_inputs = np.zeros((ntimesteps - 1, num_input))
 
 
@@ -192,37 +208,37 @@ init_inputs = np.zeros((ntimesteps - 1, num_input))
 #         a = 0
 #     ref_vel[i] = ref_vel[i - 1] + a*dt
 
-for i in range(1, ntimesteps):
-    target_states[i, 0] = target_states[i-1, 0] + np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
-    target_states[i, 1] = target_states[i-1, 1] + np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
-    target_states[i, 2] = ref_vel[i]
-    target_states[i, 3] = target_states[i-1, 3] + curv*dt
-    noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 0.5)
-    noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 0.5)
-    noisy_targets[i, 2] = ref_vel[i]
-    noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
+# for i in range(1, ntimesteps):
+#     target_states[i, 0] = target_states[i-1, 0] + np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
+#     target_states[i, 1] = target_states[i-1, 1] + np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
+#     target_states[i, 2] = ref_vel[i]
+#     target_states[i, 3] = target_states[i-1, 3] + curv*dt
+#     noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 0.5)
+#     noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 0.5)
+#     noisy_targets[i, 2] = ref_vel[i]
+#     noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
 
 # corner inputs case
 
-# for i in range(1, 40):
-#     target_states[i, 0] = target_states[i-1, 0] + dt*ref_vel[i - 1]
-#     target_states[i, 1] = target_states[i-1, 1]
-#     target_states[i, 2] = ref_vel[i]
-#     target_states[i, 3] = 0
-#     noisy_targets[i, 0] = target_states[i, 0]
-#     noisy_targets[i, 1] = target_states[i, 1]
-#     noisy_targets[i, 2] = target_states[i, 3]
-#     noisy_targets[i, 3] = target_states[i, 3]
+for i in range(1, 40):
+    target_states[i, 0] = target_states[i-1, 0] + dt*ref_vel[i - 1]
+    target_states[i, 1] = target_states[i-1, 1]
+    target_states[i, 2] = ref_vel[i]
+    target_states[i, 3] = 0
+    noisy_targets[i, 0] = target_states[i, 0]
+    noisy_targets[i, 1] = target_states[i, 1]
+    noisy_targets[i, 2] = target_states[i, 3]
+    noisy_targets[i, 3] = target_states[i, 3]
 
-# for i in range(40, 80):
-#     target_states[i, 0] = target_states[i-1, 0]
-#     target_states[i, 1] = target_states[i-1, 1] + dt*ref_vel[i - 1]
-#     target_states[i, 2] = ref_vel[i]
-#     target_states[i, 3] = np.pi/2
-#     noisy_targets[i, 0] = target_states[i, 0] 
-#     noisy_targets[i, 1] = target_states[i, 1]
-#     noisy_targets[i, 2] = target_states[i, 3]
-#     noisy_targets[i, 3] = target_states[i, 3]
+for i in range(40, 80):
+    target_states[i, 0] = target_states[i-1, 0]
+    target_states[i, 1] = target_states[i-1, 1] + dt*ref_vel[i - 1]
+    target_states[i, 2] = ref_vel[i]
+    target_states[i, 3] = np.pi/2
+    noisy_targets[i, 0] = target_states[i, 0] 
+    noisy_targets[i, 1] = target_states[i, 1]
+    noisy_targets[i, 2] = target_states[i, 3]
+    noisy_targets[i, 3] = target_states[i, 3]
 
 for i in range(1, ntimesteps):
     init_inputs[i - 1, 0] = (noisy_targets[i, 2] - noisy_targets[i - 1, 2])/dt
@@ -230,21 +246,26 @@ for i in range(1, ntimesteps):
 
 # State constraints
 for i in range(ntimesteps):
-    xmax[i, 0] = target_states[i, 0] + 0.5
-    xmax[i, 1] = target_states[i, 1] + 0.5
-    xmax[i, 2] = target_states[i, 2] + 0.1
-    xmax[i, 3] = target_states[i, 3] + 0.1
-    xmin[i, 0] = target_states[i, 0] - 0.5
-    xmin[i, 1] = target_states[i, 1] - 0.5
-    xmin[i, 2] = target_states[i, 2] - 0.1
-    xmin[i, 3] = target_states[i, 3] - 0.1
+    xmax[i, 0] = target_states[i, 0] + 1
+    xmax[i, 1] = target_states[i, 1] + 1
+    xmax[i, 2] = target_states[i, 2] + 2
+    xmax[i, 3] = target_states[i, 3] + 1
+    xmin[i, 0] = target_states[i, 0] - 1
+    xmin[i, 1] = target_states[i, 1] - 1
+    xmin[i, 2] = target_states[i, 2] - 2
+    xmin[i, 3] = target_states[i, 3] - 1
 
 
 start = time.time()
 mpc_optimizer= iterative_MPC_optimizer(system, noisy_targets, dt)
 mpc_optimizer.set_bounds(xmax, xmin)
-mpc_optimizer.inputs = init_inputs
+mpc_optimizer.set_init_inputs(init_inputs)
+# mpc_optimizer.init_input_fixed = True
 mpc_optimizer()
+
+print(init_inputs[0, 1])
+print(mpc_optimizer.inputs[0, 1])
+
 # print(states[:, 0])
 end = time.time()
 print("Computation time: ", end - start)
