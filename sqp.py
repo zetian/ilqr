@@ -8,6 +8,38 @@ from scipy.linalg import block_diag
 from systems import *
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
+from matplotlib.patches import Circle
+
+
+def dh_dx(x, ref_x):
+    dh_dx = np.array([2*(x[0] - ref_x[0]), 2*(x[1] - ref_x[1])])
+    return dh_dx
+
+
+def get_h(x, ref_x, r):
+    h = (x[0] - ref_x[0])**2 + (x[1] - ref_x[1])**2 - r**2
+    # return 0
+    return h
+
+
+def get_constraint(x, ref_x, r):
+    xmin = np.array([-np.inf, -np.inf, -np.inf, -np.inf])
+    xmax = np.array([np.inf, np.inf, np.inf, np.inf])
+    x0 = np.inf
+    x1 = np.inf
+    if dh_dx(x, ref_x)[0] != 0: 
+        x0 = (-get_h(x, ref_x, r) + x[0]*dh_dx(x, ref_x)[0])/dh_dx(x, ref_x)[0]
+    if dh_dx(x, ref_x)[1] != 0: 
+        x1 = (-get_h(x, ref_x, r) + x[1]*dh_dx(x, ref_x)[1])/dh_dx(x, ref_x)[1]
+    if (dh_dx(x, ref_x)[0] > 0):
+        xmax[0] = x0
+    if (dh_dx(x, ref_x)[1] > 0):
+        xmax[1] = x1
+    if (dh_dx(x, ref_x)[0] < 0):
+        xmin[0] = x0
+    if (dh_dx(x, ref_x)[1] < 0):
+        xmin[1] = x1
+    return xmax, xmin
 
 
 class iterative_MPC_optimizer:
@@ -33,6 +65,7 @@ class iterative_MPC_optimizer:
         self.x0 = self.target_states[0, :]
         self.xmax = np.full((self.horizon, self.n_states), np.inf)
         self.xmin = np.full((self.horizon, self.n_states), -np.inf)
+        self.raduis = 2.0
 
     def cost(self):
         states_diff = self.states - self.target_states
@@ -40,11 +73,12 @@ class iterative_MPC_optimizer:
         for i in range(self.horizon - 1):
             state = np.reshape(states_diff[i, :], (-1, 1))
             control = np.reshape(self.inputs[i, :], (-1, 1))
-            cost += np.dot(np.dot(state.T, self.Q), state) + np.dot(np.dot(control.T, self.R), control)
+            cost += np.dot(np.dot(state.T, self.Q), state) + \
+                np.dot(np.dot(control.T, self.R), control)
         state = np.reshape(states_diff[-1, :], (-1, 1))
         cost += np.dot(np.dot(state.T, self.Qf), state)
         return cost[0, 0]
-    
+
     def sim(self, x0, inputs):
         states = np.zeros((self.horizon, self.n_states))
         states[0, :] = x0
@@ -55,44 +89,53 @@ class iterative_MPC_optimizer:
     def set_bounds(self, xmax, xmin):
         self.xmax = xmax
         self.xmin = xmin
-    
+
     def set_init_inputs(self, init_inputs):
         self.inputs = init_inputs
         self.u0 = init_inputs[0, :]
-    
+
     def plot(self):
         plt.figure(figsize=(8*1.1, 6*1.1))
         currentAxis = plt.gca()
         plt.title('MPC: 2D, x and y.  ')
         plt.axis('equal')
-        plt.plot(noisy_targets[:, 0], noisy_targets[:, 1], '--r', label='Target', linewidth=2)
-        plt.plot(self.states[:, 0], self.states[:, 1], '-+k', label='MPC', linewidth=1.0)
+        plt.plot(noisy_targets[:, 0], noisy_targets[:, 1],
+                 '--r', label='Target', linewidth=2)
+        plt.plot(self.states[:, 0], self.states[:, 1],
+                 '-+k', label='MPC', linewidth=1.0)
         plt.xlabel('x (meters)')
         plt.ylabel('y (meters)')
+        # for i in range(self.horizon):
+        #     x = self.xmin[i, 0]
+        #     size_x = abs(self.xmax[i, 0] - self.xmin[i, 0])
+        #     y = self.xmin[i, 1]
+        #     size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
+        #     currentAxis.add_patch(Rectangle((x, y), size_x, size_y, alpha=1))
         for i in range(self.horizon):
-            x = self.xmin[i, 0]
-            size_x = abs(self.xmax[i, 0] - self.xmin[i, 0])
-            y = self.xmin[i, 1]
-            size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
-            currentAxis.add_patch(Rectangle((x, y), size_x, size_y, alpha=1))
-        plt.figure(figsize=(8*1.1, 6*1.1))
-        plt.title('iLQR: state vs. time.  ')
-        plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
-        plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
-        plt.ylabel('speed')
-        plt.figure(figsize=(8*1.1, 6*1.1))
-        plt.title('iLQR: input vs. time.  ')
-        plt.plot(self.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
-        plt.ylabel('inputs')
+            x = self.target_states[i, 0]
+            # size_x = abs(self.xmax[i, 0] - self.xmin[i, 0])
+            y = self.target_states[i, 1]
+            # size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
+            currentAxis.add_patch(Circle((x, y), radius = self.raduis, alpha=1))
+        # plt.figure(figsize=(8*1.1, 6*1.1))
+        # plt.title('iLQR: state vs. time.  ')
+        # plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
+        # plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+        # plt.ylabel('speed')
+        # plt.figure(figsize=(8*1.1, 6*1.1))
+        # plt.title('iLQR: input vs. time.  ')
+        # plt.plot(self.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
+        # plt.ylabel('inputs')
         plt.show()
-    
+
     def __call__(self):
         P = sparse.block_diag([sparse.kron(sparse.eye(self.horizon - 1), self.Q), self.Qf,
-                            sparse.kron(sparse.eye(self.horizon - 1), self.R)]).tocsc()
+                               sparse.kron(sparse.eye(self.horizon - 1), self.R)]).tocsc()
         q = -self.Q.dot(self.target_states[0, :])
         for i in range(1, self.horizon - 1):
             q = np.hstack([q, -self.Q.dot(self.target_states[i, :])])
-        q = np.hstack([q, -self.Qf.dot(self.target_states[-1, :]), np.zeros((self.horizon - 1)*self.m_inputs)])
+        q = np.hstack([q, -self.Qf.dot(self.target_states[-1, :]),
+                       np.zeros((self.horizon - 1)*self.m_inputs)])
 
         umin = np.ones(self.m_inputs)
         umax = np.ones(self.m_inputs)
@@ -103,11 +146,11 @@ class iterative_MPC_optimizer:
         else:
             umin = -umin*np.inf
             umax = umax*np.inf
-        
-        xmin = self.xmin.ravel()
-        xmax = self.xmax.ravel()
-        lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
-        uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
+
+        # xmin = self.xmin.ravel()
+        # xmax = self.xmax.ravel()
+        # lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
+        # uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
 
         self.states = self.target_states
         self.min_cost = np.inf
@@ -121,9 +164,11 @@ class iterative_MPC_optimizer:
                 Bd.append(Bi)
             Bu = sparse.csr_matrix(block_diag(*Bd))
             Ax = sparse.csr_matrix(block_diag(*Ad))
-            off_set = np.zeros(((self.horizon - 1)*self.n_states, self.n_states))
+            off_set = np.zeros(
+                ((self.horizon - 1)*self.n_states, self.n_states))
             Ax = sparse.hstack([Ax, off_set])
-            Ax_offset = np.hstack([off_set, -np.eye(self.n_states*(self.horizon - 1))])
+            Ax_offset = np.hstack(
+                [off_set, -np.eye(self.n_states*(self.horizon - 1))])
             Ax = Ax_offset + Ax
             # Bd = np.array([
             #     [0, 0],
@@ -143,7 +188,8 @@ class iterative_MPC_optimizer:
                 Aeq = sparse.vstack([init_x, init_u, Aeq])
             else:
                 Aeq = sparse.vstack([init_x, Aeq])
-            Aineq = sparse.eye(self.horizon*self.n_states + (self.horizon - 1)*self.m_inputs)
+            Aineq = sparse.eye(self.horizon*self.n_states +
+                               (self.horizon - 1)*self.m_inputs)
             A = sparse.vstack([Aeq, Aineq]).tocsc()
 
             leq = []
@@ -151,16 +197,36 @@ class iterative_MPC_optimizer:
             if self.init_input_fixed:
                 leq.extend(self.u0)
             for i in range(0, self.horizon - 1):
-                d = -self.states[i + 1, :] + np.dot(Ad[i], self.states[i, :]) + np.dot(Bd[i], self.inputs[i, :])
+                d = -self.states[i + 1, :] + \
+                    np.dot(Ad[i], self.states[i, :]) + \
+                    np.dot(Bd[i], self.inputs[i, :])
                 leq.extend(d)
             ueq = leq
+            # xmin = np.array([-np.inf, -np.inf, -np.inf, -np.inf])
+            xmax = np.array([])
+            xmin = np.array([])
+            for i in range(0, self.horizon):
+                # print(self.states[i, :])
+                # print(self.target_states[i, :])
+                upper, lower = get_constraint(self.states[i, :], self.target_states[i, :], self.raduis)
+                
+                print("x range: ", lower[0], " to ", upper[0])
+                print("y range: ", lower[1], " to ", upper[1])
+                xmax = np.concatenate((xmax, upper), axis=0)
+                xmin = np.concatenate((xmin, lower), axis=0)
+                # print(xmax)
+            uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
+            lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
+            # lineq = np.hstack([np.kron(np.ones(self.horizon), xmin), np.kron(np.ones(self.horizon - 1), umin)])
+
+
             l = np.hstack([leq, lineq])
             u = np.hstack([ueq, uineq])
             prob = osqp.OSQP()
 
             # # Setup workspace
-            prob.setup(P, q, A, l, u, warm_start=False, verbose=False)
-            res = prob.solve()  
+            prob.setup(P, q, A, l, u, warm_start=False, verbose=True)
+            res = prob.solve()
             # states = res.x[0: self.horizon*self.n_states]
             inputs = res.x[self.horizon*self.n_states:]
             # self.states = np.reshape(states, (-1, 4))
@@ -168,11 +234,11 @@ class iterative_MPC_optimizer:
             self.states = self.sim(self.x0, self.inputs)
             cost = self.cost()
             print("cost: ", cost)
-            if abs(1 - cost/self.min_cost) < self.eps: # or cost > self.min_cost:
+            # or cost > self.min_cost:
+            if abs(1 - cost/self.min_cost) < self.eps:
                 break
             else:
                 self.min_cost = cost
-
 
 
 eps = 1e-3
@@ -197,7 +263,7 @@ v_max = 11
 system = Car()
 system.set_dt(dt)
 system.set_cost(np.diag([50.0, 50.0, 10.0, 1.0]), np.diag([300.0, 1000.0]))
-system.Q_f = system.Q*horizon/100#*50
+system.Q_f = system.Q*horizon/100  # *50
 system.set_control_limit(np.array([[-10, 10], [-2, 2]]))
 # system.control_limited = False
 init_inputs = np.zeros((ntimesteps - 1, num_input))
@@ -235,7 +301,7 @@ for i in range(40, 80):
     target_states[i, 1] = target_states[i-1, 1] + dt*ref_vel[i - 1]
     target_states[i, 2] = ref_vel[i]
     target_states[i, 3] = np.pi/2
-    noisy_targets[i, 0] = target_states[i, 0] 
+    noisy_targets[i, 0] = target_states[i, 0]
     noisy_targets[i, 1] = target_states[i, 1]
     noisy_targets[i, 2] = target_states[i, 3]
     noisy_targets[i, 3] = target_states[i, 3]
@@ -257,7 +323,7 @@ for i in range(ntimesteps):
 
 
 start = time.time()
-mpc_optimizer= iterative_MPC_optimizer(system, noisy_targets, dt)
+mpc_optimizer = iterative_MPC_optimizer(system, noisy_targets, dt)
 mpc_optimizer.set_bounds(xmax, xmin)
 mpc_optimizer.set_init_inputs(init_inputs)
 # mpc_optimizer.init_input_fixed = True
@@ -270,8 +336,3 @@ print(mpc_optimizer.inputs[0, 1])
 end = time.time()
 print("Computation time: ", end - start)
 mpc_optimizer.plot()
-
-
-
-
-
