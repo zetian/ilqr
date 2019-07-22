@@ -12,7 +12,7 @@ from matplotlib.patches import Circle
 
 
 def dh_dx(x, ref_x):
-    dh_dx = np.array([2*(x[0] - ref_x[0]), 2*(x[1] - ref_x[1])])
+    dh_dx = np.array([2*(x[0] - ref_x[0]), 2*(x[1] - ref_x[1]), 0.0, 0.0])
     return dh_dx
 
 
@@ -21,26 +21,9 @@ def get_h(x, ref_x, r):
     # return 0
     return h
 
-
-def get_constraint(x, ref_x, r):
-    xmin = np.array([-np.inf, -np.inf, -np.inf, -np.inf])
-    xmax = np.array([np.inf, np.inf, np.inf, np.inf])
-    x0 = np.inf
-    x1 = np.inf
-    if dh_dx(x, ref_x)[0] != 0: 
-        x0 = (-get_h(x, ref_x, r) + x[0]*dh_dx(x, ref_x)[0])/dh_dx(x, ref_x)[0]
-    if dh_dx(x, ref_x)[1] != 0: 
-        x1 = (-get_h(x, ref_x, r) + x[1]*dh_dx(x, ref_x)[1])/dh_dx(x, ref_x)[1]
-    if (dh_dx(x, ref_x)[0] > 0):
-        xmax[0] = x0
-    if (dh_dx(x, ref_x)[1] > 0):
-        xmax[1] = x1
-    if (dh_dx(x, ref_x)[0] < 0):
-        xmin[0] = x0
-    if (dh_dx(x, ref_x)[1] < 0):
-        xmin[1] = x1
-    return xmax, xmin
-
+def get_uieq(x, ref_x, r):
+    C = dh_dx(x, ref_x)
+    return C[0]*x[0] + C[1]*x[1] - get_h(x, ref_x, r)
 
 class iterative_MPC_optimizer:
     def __init__(self, sys, target_states, dt):
@@ -54,7 +37,7 @@ class iterative_MPC_optimizer:
         self.Q = sys.Q
         self.R = sys.R
         self.Qf = sys.Q_f
-        self.maxIter = 50
+        self.maxIter = 20
         self.min_cost = 0.0
         self.LM_parameter = 0.0
         self.eps = 1e-3
@@ -65,7 +48,7 @@ class iterative_MPC_optimizer:
         self.x0 = self.target_states[0, :]
         self.xmax = np.full((self.horizon, self.n_states), np.inf)
         self.xmin = np.full((self.horizon, self.n_states), -np.inf)
-        self.raduis = 2.0
+        self.raduis = 0.5
 
     def cost(self):
         states_diff = self.states - self.target_states
@@ -105,18 +88,10 @@ class iterative_MPC_optimizer:
                  '-+k', label='MPC', linewidth=1.0)
         plt.xlabel('x (meters)')
         plt.ylabel('y (meters)')
-        # for i in range(self.horizon):
-        #     x = self.xmin[i, 0]
-        #     size_x = abs(self.xmax[i, 0] - self.xmin[i, 0])
-        #     y = self.xmin[i, 1]
-        #     size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
-        #     currentAxis.add_patch(Rectangle((x, y), size_x, size_y, alpha=1))
         for i in range(self.horizon):
             x = self.target_states[i, 0]
-            # size_x = abs(self.xmax[i, 0] - self.xmin[i, 0])
             y = self.target_states[i, 1]
-            # size_y = abs(self.xmax[i, 1] - self.xmin[i, 1])
-            currentAxis.add_patch(Circle((x, y), radius = self.raduis, alpha=1))
+            currentAxis.add_patch(Circle((x, y), radius=self.raduis, alpha=1))
         # plt.figure(figsize=(8*1.1, 6*1.1))
         # plt.title('iLQR: state vs. time.  ')
         # plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
@@ -162,8 +137,10 @@ class iterative_MPC_optimizer:
                 Bi = system.compute_df_du(self.states[i, :], self.inputs[i, :])
                 Ad.append(Ai)
                 Bd.append(Bi)
+            # print(Ad)
             Bu = sparse.csr_matrix(block_diag(*Bd))
             Ax = sparse.csr_matrix(block_diag(*Ad))
+            # print(Ax)
             off_set = np.zeros(
                 ((self.horizon - 1)*self.n_states, self.n_states))
             Ax = sparse.hstack([Ax, off_set])
@@ -188,8 +165,14 @@ class iterative_MPC_optimizer:
                 Aeq = sparse.vstack([init_x, init_u, Aeq])
             else:
                 Aeq = sparse.vstack([init_x, Aeq])
-            Aineq = sparse.eye(self.horizon*self.n_states +
-                               (self.horizon - 1)*self.m_inputs)
+            Cd = []
+            for i in range(self.horizon):
+                Ci = dh_dx(self.states[i, :], self.target_states[i, :])
+                # print(Ci)
+                Cd.append(Ci)
+            Cu = block_diag(*Cd)
+            Du = np.eye((self.horizon - 1)*self.m_inputs)
+            Aineq = sparse.csr_matrix(block_diag(Cu, Du))
             A = sparse.vstack([Aeq, Aineq]).tocsc()
 
             leq = []
@@ -202,30 +185,20 @@ class iterative_MPC_optimizer:
                     np.dot(Bd[i], self.inputs[i, :])
                 leq.extend(d)
             ueq = leq
-            # xmin = np.array([-np.inf, -np.inf, -np.inf, -np.inf])
             xmax = np.array([])
-            xmin = np.array([])
+            xmin = -np.ones(self.horizon)*np.inf
             for i in range(0, self.horizon):
-                # print(self.states[i, :])
-                # print(self.target_states[i, :])
-                upper, lower = get_constraint(self.states[i, :], self.target_states[i, :], self.raduis)
-                
-                print("x range: ", lower[0], " to ", upper[0])
-                print("y range: ", lower[1], " to ", upper[1])
-                xmax = np.concatenate((xmax, upper), axis=0)
-                xmin = np.concatenate((xmin, lower), axis=0)
-                # print(xmax)
+                upper = get_uieq(self.states[i, :], self.target_states[i, :], self.raduis)
+                xmax = np.append(xmax, upper)
             uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
             lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
-            # lineq = np.hstack([np.kron(np.ones(self.horizon), xmin), np.kron(np.ones(self.horizon - 1), umin)])
-
 
             l = np.hstack([leq, lineq])
             u = np.hstack([ueq, uineq])
             prob = osqp.OSQP()
 
             # # Setup workspace
-            prob.setup(P, q, A, l, u, warm_start=False, verbose=True)
+            prob.setup(P, q, A, l, u, warm_start=False, verbose=False)
             res = prob.solve()
             # states = res.x[0: self.horizon*self.n_states]
             inputs = res.x[self.horizon*self.n_states:]
@@ -263,7 +236,7 @@ v_max = 11
 system = Car()
 system.set_dt(dt)
 system.set_cost(np.diag([50.0, 50.0, 10.0, 1.0]), np.diag([300.0, 1000.0]))
-system.Q_f = system.Q*horizon/100  # *50
+system.Q_f = system.Q*horizon/10  # *50
 system.set_control_limit(np.array([[-10, 10], [-2, 2]]))
 # system.control_limited = False
 init_inputs = np.zeros((ntimesteps - 1, num_input))
