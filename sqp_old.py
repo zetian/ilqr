@@ -25,14 +25,13 @@ def get_uieq(x, ref_x, r):
     C = dh_dx(x, ref_x)
     return C[0]*x[0] + C[1]*x[1] - get_h(x, ref_x, r)
 
-class sequential_QP_optimizer:
-    def __init__(self, sys, constraint, target_states, dt):
+class iterative_MPC_optimizer:
+    def __init__(self, sys, target_states, dt):
         self.target_states = target_states
         self.horizon = self.target_states.shape[0]
         self.dt = dt
         self.converge = False
         self.system = sys
-        self.constraint = constraint
         self.n_states = sys.state_size
         self.m_inputs = sys.control_size
         self.Q = sys.Q
@@ -170,13 +169,12 @@ class sequential_QP_optimizer:
                 Aeq = sparse.vstack([init_x, init_u, Aeq])
             else:
                 Aeq = sparse.vstack([init_x, Aeq])
-            # Cd = []
-            # for i in range(self.horizon):
-            #     Ci = dh_dx(self.states[i, :], self.target_states[i, :])
-            #     # print(Ci)
-            #     Cd.append(Ci)
-            # Cu = block_diag(*Cd)
-            Cu = self.constraint.get_linear_constraint(self.states)
+            Cd = []
+            for i in range(self.horizon):
+                Ci = dh_dx(self.states[i, :], self.target_states[i, :])
+                # print(Ci)
+                Cd.append(Ci)
+            Cu = block_diag(*Cd)
             Du = np.eye((self.horizon - 1)*self.m_inputs)
             Aineq = sparse.csr_matrix(block_diag(Cu, Du))
             A = sparse.vstack([Aeq, Aineq]).tocsc()
@@ -191,13 +189,11 @@ class sequential_QP_optimizer:
                     np.dot(Bd[i], self.inputs[i, :])
                 leq.extend(d)
             ueq = leq
-
-            xmin, xmax = self.constraint.get_bounds(self.states)
-            # xmax = np.array([])
-            # xmin = -np.ones(self.horizon)*np.inf
-            # for i in range(0, self.horizon):
-            #     upper = get_uieq(self.states[i, :], self.target_states[i, :], self.raduis)
-            #     xmax = np.append(xmax, upper)
+            xmax = np.array([])
+            xmin = -np.ones(self.horizon)*np.inf
+            for i in range(0, self.horizon):
+                upper = get_uieq(self.states[i, :], self.target_states[i, :], self.raduis)
+                xmax = np.append(xmax, upper)
             uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
             lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
 
