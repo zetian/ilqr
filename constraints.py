@@ -22,3 +22,11 @@ class CircleConstraintForCar:
         result[2] = -2*(x_next[0] - self.center[0]) * self.system.dt
         result[3] = -2*(x_next[1] - self.center[1]) * self.system.dt
         return result
+
+
+
+class CircleConstraint:
+    def __init__(self, center, r):
+        self.center = center
+        self.r = r
+    

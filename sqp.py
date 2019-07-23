@@ -50,6 +50,7 @@ class iterative_MPC_optimizer:
         self.xmin = np.full((self.horizon, self.n_states), -np.inf)
         self.raduis = 0.7
 
+
     def cost(self):
         states_diff = self.states - self.target_states
         cost = 0.0
@@ -92,16 +93,19 @@ class iterative_MPC_optimizer:
             x = self.target_states[i, 0]
             y = self.target_states[i, 1]
             currentAxis.add_patch(Circle((x, y), radius=self.raduis, alpha=1))
-        # plt.figure(figsize=(8*1.1, 6*1.1))
-        # plt.title('iLQR: state vs. time.  ')
-        # plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
-        # plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
-        # plt.ylabel('speed')
-        # plt.figure(figsize=(8*1.1, 6*1.1))
-        # plt.title('iLQR: input vs. time.  ')
-        # plt.plot(self.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
-        # plt.ylabel('inputs')
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('iLQR: state vs. time.  ')
+        plt.plot(self.states[:, 2], '-b', linewidth=1.0, label='speed')
+        plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
+        plt.ylabel('speed')
+        plt.figure(figsize=(8*1.1, 6*1.1))
+        plt.title('iLQR: input vs. time.  ')
+        plt.plot(self.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
+        plt.ylabel('inputs')
         plt.show()
+
+    # def update_A(self):
+
 
     def __call__(self):
         P = sparse.block_diag([sparse.kron(sparse.eye(self.horizon - 1), self.Q), self.Qf,
@@ -247,37 +251,37 @@ init_inputs = np.zeros((ntimesteps - 1, num_input))
 #         a = 0
 #     ref_vel[i] = ref_vel[i - 1] + a*dt
 
-for i in range(1, ntimesteps):
-    target_states[i, 0] = target_states[i-1, 0] + np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
-    target_states[i, 1] = target_states[i-1, 1] + np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
-    target_states[i, 2] = ref_vel[i]
-    target_states[i, 3] = target_states[i-1, 3] + curv*dt
-    noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 0.5)
-    noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 0.5)
-    noisy_targets[i, 2] = ref_vel[i]
-    noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
+# for i in range(1, ntimesteps):
+#     target_states[i, 0] = target_states[i-1, 0] + np.cos(target_states[i-1, 3])*dt*ref_vel[i - 1]
+#     target_states[i, 1] = target_states[i-1, 1] + np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
+#     target_states[i, 2] = ref_vel[i]
+#     target_states[i, 3] = target_states[i-1, 3] + curv*dt
+#     noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 0.5)
+#     noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 0.5)
+#     noisy_targets[i, 2] = ref_vel[i]
+#     noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
 
 # corner inputs case
 
-# for i in range(1, 40):
-#     target_states[i, 0] = target_states[i-1, 0] + dt*ref_vel[i - 1]
-#     target_states[i, 1] = target_states[i-1, 1]
-#     target_states[i, 2] = ref_vel[i]
-#     target_states[i, 3] = 0
-#     noisy_targets[i, 0] = target_states[i, 0]
-#     noisy_targets[i, 1] = target_states[i, 1]
-#     noisy_targets[i, 2] = target_states[i, 3]
-#     noisy_targets[i, 3] = target_states[i, 3]
+for i in range(1, 40):
+    target_states[i, 0] = target_states[i-1, 0] + dt*ref_vel[i - 1]
+    target_states[i, 1] = target_states[i-1, 1]
+    target_states[i, 2] = ref_vel[i]
+    target_states[i, 3] = 0
+    noisy_targets[i, 0] = target_states[i, 0]
+    noisy_targets[i, 1] = target_states[i, 1]
+    noisy_targets[i, 2] = target_states[i, 3]
+    noisy_targets[i, 3] = target_states[i, 3]
 
-# for i in range(40, 80):
-#     target_states[i, 0] = target_states[i-1, 0]
-#     target_states[i, 1] = target_states[i-1, 1] + dt*ref_vel[i - 1]
-#     target_states[i, 2] = ref_vel[i]
-#     target_states[i, 3] = np.pi/2
-#     noisy_targets[i, 0] = target_states[i, 0]
-#     noisy_targets[i, 1] = target_states[i, 1]
-#     noisy_targets[i, 2] = target_states[i, 3]
-#     noisy_targets[i, 3] = target_states[i, 3]
+for i in range(40, 80):
+    target_states[i, 0] = target_states[i-1, 0]
+    target_states[i, 1] = target_states[i-1, 1] + dt*ref_vel[i - 1]
+    target_states[i, 2] = ref_vel[i]
+    target_states[i, 3] = np.pi/2
+    noisy_targets[i, 0] = target_states[i, 0]
+    noisy_targets[i, 1] = target_states[i, 1]
+    noisy_targets[i, 2] = target_states[i, 3]
+    noisy_targets[i, 3] = target_states[i, 3]
 
 for i in range(1, ntimesteps):
     init_inputs[i - 1, 0] = (noisy_targets[i, 2] - noisy_targets[i - 1, 2])/dt
