@@ -52,6 +52,9 @@ class iterative_LQR_quadratic_cost:
         alpha = 1.0
         cnt = 50
         while (cnt >= 0):
+            if alpha < 1e-4:
+                self.converge = True
+                break
             cnt -= 1
             for i in range(0, self.horizon - 1):
             # for i in range(0, 2):
@@ -71,11 +74,6 @@ class iterative_LQR_quadratic_cost:
             if cost < self.min_cost:
                 self.min_cost = cost
                 # print('cost decreased after this pass. learning_rate: ', alpha)
-                break
-            elif alpha < 1e-4:
-                self.converge = True
-                # print(
-                #     'learning_rate below threshold. Unable to reduce cost. learning_rate: ', alpha)
                 break
             else:
                 alpha /= 2.0
