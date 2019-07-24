@@ -54,14 +54,6 @@ class Car(System):
                           [1.0, 0.0],
                           [0.0, 1.0]])*self.dt
         return df_du
-    def get_A(self, x, u):
-        theta = x[3]
-        A = np.array([[1.0, 0.0, np.cos(theta)*self.dt, 0.0],
-                        [0.0, 1.0, np.sin(theta)*self.dt, 0.0],
-                        [0.0, 0.0,  1.0, 0.0],
-                        [0.0, 0.0,  0.0, 1.0]
-                        ])
-        return A
 
 class CarAcceleration(System):
     def __init__(self):

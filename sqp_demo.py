@@ -113,7 +113,7 @@ mpc_optimizer.set_init_inputs(init_inputs)
 mpc_optimizer()
 end = time.time()
 print("Computation time: ", end - start)
-mpc_optimizer.plot()
+# mpc_optimizer.plot()
 
 
 plt.figure(figsize=(8*1.1, 6*1.1))
