@@ -20,7 +20,7 @@ class sequential_QP_optimizer:
         self.Qf = sys.Q_f
         self.maxIter = 20
         self.min_cost = 0.0
-        self.eps = 1e-4
+        self.eps = 1e-2
         self.cost_eps = 1e-6
         self.states = np.zeros((self.horizon, self.n_states))
         self.inputs = np.zeros((self.horizon - 1, self.m_inputs))
@@ -146,17 +146,20 @@ class sequential_QP_optimizer:
                 res.x[self.horizon*self.n_states:], (-1, 2))
             d_u = solved_inputs - self.inputs
             alpha = 1.0
+            cost = np.inf
             while True:
-                cost = self.cost()
                 if alpha < self.eps or abs(1 - cost/self.min_cost) < self.cost_eps:
                     self.converge = True
                     break
                 self.inputs = prev_inputs + alpha*d_u
                 self.states = self.sim(self.x0, self.inputs)
+                cost = self.cost()
                 if (cost < self.min_cost):
+                    # print("cost reduced, continue next qp, cost: ", cost)
                     self.min_cost = cost
                     break
                 else:
+                    # print("cost not redeuced, reduce learning rate, alpha: ", alpha)
                     alpha /= 2.0
                     self.states = np.copy(prev_states)
                     self.inputs = np.copy(prev_inputs)
