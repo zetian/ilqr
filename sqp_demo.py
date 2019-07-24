@@ -16,6 +16,8 @@ horizon = 80
 ntimesteps = horizon
 target_states = np.zeros((ntimesteps, 4))
 noisy_targets = np.zeros((ntimesteps, 4))
+centers = np.zeros((ntimesteps, 2))
+
 xmax = np.zeros((ntimesteps, 4))
 xmin = np.zeros((ntimesteps, 4))
 noisy_targets[0, 2] = 1
@@ -62,6 +64,8 @@ for i in range(1, 40):
     noisy_targets[i, 1] = target_states[i, 1]
     noisy_targets[i, 2] = target_states[i, 3]
     noisy_targets[i, 3] = target_states[i, 3]
+    centers[i, 0] = noisy_targets[i, 0]
+    centers[i, 1] = noisy_targets[i, 1]
 
 for i in range(40, 80):
     target_states[i, 0] = target_states[i-1, 0]
@@ -72,6 +76,8 @@ for i in range(40, 80):
     noisy_targets[i, 1] = target_states[i, 1]
     noisy_targets[i, 2] = target_states[i, 3]
     noisy_targets[i, 3] = target_states[i, 3]
+    centers[i, 0] = noisy_targets[i, 0]
+    centers[i, 1] = noisy_targets[i, 1]
 
 for i in range(1, ntimesteps):
     init_inputs[i - 1, 0] = (noisy_targets[i, 2] - noisy_targets[i - 1, 2])/dt
@@ -88,13 +94,40 @@ for i in range(ntimesteps):
     xmin[i, 2] = target_states[i, 2] - 2
     xmin[i, 3] = target_states[i, 3] - 1
 
+constraint = BubbleConstraint(horizon)
+radius = []
+vel_bounds = [0, 2]
+r = 0.7
+for i in range(horizon):
+    radius.append(r)
+
+constraint.setup(centers, radius, vel_bounds)
 
 start = time.time()
-mpc_optimizer = iterative_MPC_optimizer(system, noisy_targets, dt)
+mpc_optimizer = sequential_QP_optimizer(system, constraint, noisy_targets, dt)
 mpc_optimizer.set_bounds(xmax, xmin)
 mpc_optimizer.set_init_inputs(init_inputs)
 # mpc_optimizer.init_input_fixed = True
 mpc_optimizer()
+
+plt.figure(figsize=(8*1.1, 6*1.1))
+currentAxis = plt.gca()
+plt.title('MPC: 2D, x and y.  ')
+plt.axis('equal')
+plt.plot(noisy_targets[:, 0], noisy_targets[:, 1],
+            '--r', label='Target', linewidth=2)
+plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1],
+            '-+k', label='MPC', linewidth=1.0)
+plt.xlabel('x (meters)')
+plt.ylabel('y (meters)')
+for i in range(mpc_optimizer.horizon):
+    x = mpc_optimizer.target_states[i, 0]
+    y = mpc_optimizer.target_states[i, 1]
+    r = radius[i]
+    currentAxis.add_patch(Circle((x, y), radius=r, alpha=1))
+plt.show()
+
+
 
 print(init_inputs[0, 1])
 print(mpc_optimizer.inputs[0, 1])
@@ -102,4 +135,4 @@ print(mpc_optimizer.inputs[0, 1])
 # print(states[:, 0])
 end = time.time()
 print("Computation time: ", end - start)
-mpc_optimizer.plot()
+# mpc_optimizer.plot()
