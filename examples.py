@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import timeit
 from systems import *
 from ilqr import iterative_LQR_quadratic_cost
-from constraints import CircleConstraintForCar
+from constraints import *
 
 def example_acc():
     ntimesteps = 100
@@ -20,7 +20,7 @@ def example_acc():
     car_system.set_dt(dt)
     car_system.set_cost(
         np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([3000.0, 1000.0]))
-    car_system.set_control_limit(np.array([[-1.5, 1.5], [-0.3, 0.3]]))
+    car_system.set_control_limit(np.array([[0, 1.5], [-0.3, 0.3]]))
     init_inputs = np.zeros((car_system.control_size, ntimesteps - 1))
 
     for i in range(40, ntimesteps):
@@ -34,8 +34,8 @@ def example_acc():
             np.sin(target_states[3, i-1])*dt*ref_vel[i - 1]
         target_states[2, i] = ref_vel[i]
         target_states[3, i] = target_states[3, i-1] + curv*dt
-        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 10.0)
-        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 10.0)
+        noisy_targets[0, i] = target_states[0, i] + random.uniform(0, 5.0)
+        noisy_targets[1, i] = target_states[1, i] + random.uniform(0, 5.0)
         noisy_targets[2, i] = target_states[2, i]
         noisy_targets[3, i] = target_states[3, i] + random.uniform(0, 1.0)
     
@@ -232,7 +232,7 @@ def example_constraints():
     car_system.set_cost(
         np.diag([50.0, 50.0, 1000.0, 0.0]), np.diag([1000.0, 1000.0]))
 
-    constraint = CircleConstraintForCar(np.array([0, 40]), 10.0, car_system)
+    # constraint = CircleConstraintForCar(np.array([0, 40]), 10.0, car_system)
 
 if __name__ == '__main__':
     # example_jerk()

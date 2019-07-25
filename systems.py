@@ -34,7 +34,7 @@ class Car(System):
         v = x[2]
         acc = u[0]
         theta_rate = u[1]
-        x_next = np.reshape(x, (-1, 1), order='F') + np.array(
+        x_next = np.reshape(x, (-1, 1)) + np.array(
             [[v*np.cos(theta)], [v*np.sin(theta)], [acc], [theta_rate]])*self.dt
         return np.reshape(x_next, (-1,))
 
@@ -66,7 +66,7 @@ class CarAcceleration(System):
         acc = x[3]
         jerk = u[0]
         theta_rate = u[1]
-        x_next = np.reshape(x, (-1, 1), order='F') + np.array(
+        x_next = np.reshape(x, (-1, 1)) + np.array(
             [[v*np.cos(theta)], [v*np.sin(theta)], [acc], [jerk], [theta_rate]])*self.dt
         return np.reshape(x_next, (-1,))
 
@@ -97,7 +97,7 @@ class DubinsCar(System):
         theta = x[2]
         v = u[0]
         curvature = u[1]
-        x_next = np.reshape(x, (-1, 1), order='F') + np.array(
+        x_next = np.reshape(x, (-1, 1)) + np.array(
             [[v*np.cos(theta)], [v*np.sin(theta)], [v*curvature]])*self.dt
         return np.reshape(x_next, (-1,))
 

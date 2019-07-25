@@ -4,8 +4,16 @@ from matplotlib import pyplot as plt
 import scipy.sparse as sparse
 from scipy.linalg import block_diag
 
-
 class sequential_QP_optimizer:
+    """
+    Sequential QP(nonlinear MPC)can be used as a controller/trajectory optimizer.
+    Reference:
+    From linear to nonlinear MPC: bridging the gap via the real-time iteration
+    http://cse.lab.imtlucca.it/~bemporad/publications/papers/ijc_rtiltv.pdf
+    A Linear Time Varying Model Predictive Control Approach to the Integrated 
+    Vehicle Dynamics Control Problem in Autonomous Systems
+    https://ieeexplore.ieee.org/document/4434137
+    """
     def __init__(self, sys, constraint, target_states, dt):
         self.target_states = target_states
         self.horizon = self.target_states.shape[0]
@@ -93,7 +101,6 @@ class sequential_QP_optimizer:
         Ax = sparse.hstack([Ax, off_set])
         Ax = Ax + np.hstack(
             [off_set, -np.eye(self.n_states*(self.horizon - 1))])
-        # Ax = Ax_offset + Ax
         Aeq = sparse.hstack([Ax, Bu])
         init_x = np.zeros((self.n_states, Aeq.shape[1]))
         init_u = np.zeros((self.m_inputs, Aeq.shape[1]))
