@@ -27,6 +27,11 @@ class sequential_QP_optimizer:
         self.u0 = self.inputs[0, :]
         self.init_input_fixed = False
         self.x0 = self.target_states[0, :]
+        self.umin = -np.ones(self.m_inputs)*np.inf
+        self.umax = np.ones(self.m_inputs)*np.inf
+        if self.system.control_limited:
+            self.umin = self.system.control_limit[:, 0]
+            self.umax = self.system.control_limit[:, 1]
 
     def cost(self):
         states_diff = self.states - self.target_states
@@ -86,9 +91,9 @@ class sequential_QP_optimizer:
         off_set = np.zeros(
             ((self.horizon - 1)*self.n_states, self.n_states))
         Ax = sparse.hstack([Ax, off_set])
-        Ax_offset = np.hstack(
+        Ax = Ax + np.hstack(
             [off_set, -np.eye(self.n_states*(self.horizon - 1))])
-        Ax = Ax_offset + Ax
+        # Ax = Ax_offset + Ax
         Aeq = sparse.hstack([Ax, Bu])
         init_x = np.zeros((self.n_states, Aeq.shape[1]))
         init_u = np.zeros((self.m_inputs, Aeq.shape[1]))
@@ -114,17 +119,11 @@ class sequential_QP_optimizer:
                 np.dot(Bd[i], self.inputs[i, :])
             leq.extend(d)
         ueq = leq
-        umin = -np.ones(self.m_inputs)*np.inf
-        umax = np.ones(self.m_inputs)*np.inf
-        if self.system.control_limited:
-            umin = self.system.control_limit[:, 0]
-            umax = self.system.control_limit[:, 1]
         xmin, xmax = self.constraint.get_bounds(self.states)
-        uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), umax)])
-        lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), umin)])
+        uineq = np.hstack([xmax, np.kron(np.ones(self.horizon - 1), self.umax)])
+        lineq = np.hstack([xmin, np.kron(np.ones(self.horizon - 1), self.umin)])
         l = np.hstack([leq, lineq])
         u = np.hstack([ueq, uineq])
-
         return A, l, u
 
     def __call__(self):
