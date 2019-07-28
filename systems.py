@@ -18,9 +18,10 @@ class System:
     def set_final_cost(self, Q_f):
         self.Q_f = Q_f
 
-    def set_control_limit(self, limit):
+    def set_control_limit(self, lower_limit, upper_limit):
         self.control_limited = True
-        self.control_limit = limit
+        self.control_lower_limit = lower_limit
+        self.control_upper_limit = upper_limit
 
 
 class Car(System):

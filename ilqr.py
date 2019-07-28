@@ -3,7 +3,7 @@ import numpy as np
 "iterative LQR with Quadratic cost"
 
 
-class iterative_LQR_quadratic_cost:
+class iterative_LQR:
     """
     iterative LQR can be used as a controller/trajectory optimizer.
     Reference:
@@ -16,7 +16,7 @@ class iterative_LQR_quadratic_cost:
 
     def __init__(self, sys, target_states, dt):
         self.target_states = target_states
-        self.horizon = self.target_states.shape[1]
+        self.horizon = self.target_states.shape[0]
         self.dt = dt
         self.converge = False
         self.system = sys
@@ -29,53 +29,44 @@ class iterative_LQR_quadratic_cost:
         self.min_cost = 0.0
         self.LM_parameter = 0.0
         self.states = np.zeros(
-            (self.n_states, self.horizon))
+            (self.horizon, self.n_states))
         self.inputs = np.zeros(
-            (self.m_inputs, self.horizon - 1))
+            (self.horizon - 1, self.m_inputs))
 
     def cost(self):
         states_diff = self.states - self.target_states
         cost = 0.0
         for i in range(self.horizon - 1):
-            state = np.reshape(states_diff[:, i], (-1, 1))
-            control = np.reshape(self.inputs[:, i], (-1, 1))
+            state = np.reshape(states_diff[i, :], (-1, 1))
+            control = np.reshape(self.inputs[i, :], (-1, 1))
             cost += np.dot(np.dot(state.T, self.Q), state) + \
                 np.dot(np.dot(control.T, self.R), control)
-        state = np.reshape(states_diff[:, -1], (-1, 1))
+        state = np.reshape(states_diff[-1, :], (-1, 1))
         cost += np.dot(np.dot(state.T, self.Qf), state)
-        return cost
+        return cost[0, 0]
 
     def forward_pass(self):
         prev_states = np.copy(self.states)
         prev_inputs = np.copy(self.inputs)
-        # prev_cost = self.cost()
         alpha = 1.0
         cnt = 50
         while (cnt >= 0):
+            if alpha < 1e-4:
+                self.converge = True
+                break
             cnt -= 1
             for i in range(0, self.horizon - 1):
-            # for i in range(0, 2):
-                self.inputs[:, i] = self.inputs[:, i] + alpha*np.reshape(self.k[i, :, :], (-1,)) + np.reshape(
-                    np.dot(self.K[i, :, :], np.reshape(self.states[:, i] - prev_states[:, i], (-1, 1))), (-1,))
-                # print("self.inputs[:, i] before constraints: ", self.inputs[:, i])
+                self.inputs[i, :] = self.inputs[i, :] + alpha*np.reshape(self.k[i, :, :], (-1,)) + np.reshape(
+                    np.dot(self.K[i, :, :], np.reshape(self.states[i, :] - prev_states[i, :], (-1, 1))), (-1,))
                 if self.system.control_limited:
                     for j in range(self.m_inputs):
-                        self.inputs[j, i] = min(max(
-                            self.inputs[j, i], self.system.control_limit[j, 0]), self.system.control_limit[j, 1])
-                # print("self.inputs[:, i]: ", self.inputs[:, i])
-                self.states[:, i + 1] = self.system.model_f(
-                    self.states[:, i], self.inputs[:, i])
-                # print("self.states[:, i]: ", self.states[:, i])
-                # print("self.states[:, i + 1]: ", self.states[:, i + 1])
+                        self.inputs[i, j] = min(max(
+                            self.inputs[i, j], self.system.control_lower_limit[j]), self.system.control_upper_limit[j])
+                self.states[i + 1, :] = self.system.model_f(
+                    self.states[i, :], self.inputs[i, :])
             cost = self.cost()
             if cost < self.min_cost:
                 self.min_cost = cost
-                # print('cost decreased after this pass. learning_rate: ', alpha)
-                break
-            elif alpha < 1e-4:
-                self.converge = True
-                # print(
-                #     'learning_rate below threshold. Unable to reduce cost. learning_rate: ', alpha)
                 break
             else:
                 alpha /= 2.0
@@ -87,30 +78,23 @@ class iterative_LQR_quadratic_cost:
         self.K = np.zeros((self.horizon - 1, self.m_inputs, self.n_states))
         Vx = 2.0 *\
             np.dot(
-                self.Qf, self.states[:, -1] - self.target_states[:, -1])
+                self.Qf, self.states[-1, :] - self.target_states[-1, :])
         Vxx = 2.0*self.Qf
         dl_dxdx = 2.0*self.Q
         dl_dudu = 2.0*self.R
-        # print(Vxx)
         dl_dudx = np.zeros((self.m_inputs, self.n_states))
         for i in range(self.horizon - 2, -1, -1):
-        # for i in range(0, -1, -1):
-            u = self.inputs[:, i]
-            x = self.states[:, i]
+            u = self.inputs[i, :]
+            x = self.states[i, :]
             df_du = self.system.compute_df_du(x, u)
-            # print("df_du", df_du)
             df_dx = self.system.compute_df_dx(x, u)
-            dl_dx = 2.0*np.dot(self.Q, x - self.target_states[:, i])
+            dl_dx = 2.0*np.dot(self.Q, x - self.target_states[i, :])
             dl_du = 2.0*np.dot(self.R, u)
             Qx = dl_dx + np.dot(df_dx.T, Vx)
-            # print("Qx", Qx)
             Qu = dl_du + np.dot(df_du.T, Vx)
-            # print("Qx", Qu)
             Vxx_augmented = Vxx + self.LM_parameter * np.eye(self.n_states)
             Qxx = dl_dxdx + np.dot(np.dot(df_dx.T, Vxx_augmented), df_dx)
-            # print("Qxx", Qxx)
             Quu = dl_dudu + np.dot(np.dot(df_du.T, Vxx_augmented), df_du)
-            # print("Quu", Quu)
             Qux = dl_dudx + np.dot(np.dot(df_du.T, Vxx_augmented), df_dx)
             Quu_inv = np.linalg.inv(Quu)
             k = -np.dot(Quu_inv, Qu)
@@ -119,16 +103,12 @@ class iterative_LQR_quadratic_cost:
             self.K[i, :, :] = K
             Vx = Qx + np.dot(K.T, Qu)
             Vxx = Qxx + np.dot(K.T, Qux)
-            # print("Vxx", Vxx)
 
     def __call__(self):
-        # print(self.inputs)
         self.min_cost = self.cost()
-        # print("init cost: ", self.min_cost)
         for iter in range(self.maxIter):
             if (self.converge):
                 break
             self.backward_pass()
             self.forward_pass()
-        # print(self.min_cost)
         return self.states

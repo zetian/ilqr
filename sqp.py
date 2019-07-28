@@ -38,8 +38,8 @@ class sequential_QP_optimizer:
         self.umin = -np.ones(self.m_inputs)*np.inf
         self.umax = np.ones(self.m_inputs)*np.inf
         if self.system.control_limited:
-            self.umin = self.system.control_limit[:, 0]
-            self.umax = self.system.control_limit[:, 1]
+            self.umin = self.system.control_lower_limit
+            self.umax = self.system.control_upper_limit
 
     def cost(self):
         states_diff = self.states - self.target_states
