@@ -67,7 +67,7 @@ def example_acc():
     plt.plot(noisy_targets[:, 0],
              noisy_targets[:, 1], '--r', label='Target', linewidth=2)
     plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
-             '-+b', label='iLQR', linewidth=1.0)
+             '-+k', label='iLQR', linewidth=1.0)
     plt.legend(loc='upper left')
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
@@ -148,7 +148,7 @@ def example_jerk():
     plt.plot(noisy_targets[:, 0],
              noisy_targets[:, 1], '--r', label='Target', linewidth=2)
     plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
-             '-+b', label='iLQR', linewidth=1.0)
+             '-+k', label='iLQR', linewidth=1.0)
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     plt.figure(figsize=(8*1.1, 6*1.1))
@@ -202,7 +202,7 @@ def example_dubins():
     plt.plot(optimizer.target_states[:, 0],
              optimizer.target_states[:, 1], '--r', label='Target', linewidth=2)
     plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
-             '-+b', label='iLQR', linewidth=1.0)
+             '-+k', label='iLQR', linewidth=1.0)
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     plt.show()
