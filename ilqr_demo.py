@@ -7,7 +7,7 @@ from ilqr import iterative_LQR
 
 
 def example_acc():
-    horizon = 100
+    horizon = 120
     target_states = np.zeros((horizon, 4))
     noisy_targets = np.zeros((horizon, 4))
     ref_vel = np.zeros(horizon)
@@ -33,10 +33,10 @@ def example_acc():
             np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
         target_states[i, 2] = ref_vel[i]
         target_states[i, 3] = target_states[i-1, 3] + curv*dt
-        noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 1)
-        noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 1)
+        noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 3)
+        noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 3)
         noisy_targets[i, 2] = ref_vel[i]
-        noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.1)
+        noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.5)
 
     for i in range(1, horizon):
         init_inputs[i - 1, 0] = (noisy_targets[i, 2] -
@@ -68,6 +68,7 @@ def example_acc():
              noisy_targets[:, 1], '--r', label='Target', linewidth=2)
     plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
              '-+b', label='iLQR', linewidth=1.0)
+    plt.legend(loc='upper left')
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     plt.figure(figsize=(8*1.1, 6*1.1))
@@ -209,5 +210,5 @@ def example_dubins():
 
 if __name__ == '__main__':
     # example_dubins()
-    example_jerk()
-    # example_acc()
+    # example_jerk()
+    example_acc()

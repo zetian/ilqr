@@ -67,6 +67,7 @@ def random_example():
              '--r', label='Target', linewidth=2)
     plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1],
              '-+k', label='SQP', linewidth=1.0)
+    plt.legend(loc='upper left')
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     for i in range(mpc_optimizer.horizon):
@@ -153,6 +154,7 @@ def corner_example():
              '--r', label='Target', linewidth=2)
     plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1],
              '-+k', label='SQP', linewidth=1.0)
+    plt.legend(loc='upper left')
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     for i in range(mpc_optimizer.horizon):
@@ -254,6 +256,7 @@ def random_example_2():
              '--r', label='Target', linewidth=2)
     plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1],
              '-+k', label='SQP', linewidth=1.0)
+    plt.legend(loc='upper left')
     plt.xlabel('x (meters)')
     plt.ylabel('y (meters)')
     for i in range(mpc_optimizer.horizon):
@@ -266,37 +269,7 @@ def random_example_2():
 
 if __name__ == "__main__":
     # random_example()
-    corner_example()
-    # random_example_2()
-
-
-def plot(mpc_optimizer):
-
-    plt.figure(figsize=(8*1.1, 6*1.1))
-    # currentAxis = plt.gca()
-    plt.title('SQP: 2D, x and y.  ')
-    plt.axis('equal')
-    plt.plot(mpc_optimizer.target_states[:, 0], mpc_optimizer.target_states[:, 1],
-             '--r', label='Target', linewidth=2)
-    plt.plot(mpc_optimizer.states[:, 0], mpc_optimizer.states[:, 1],
-             '-+k', label='SQP', linewidth=1.0)
-    plt.xlabel('x (meters)')
-    plt.ylabel('y (meters)')
-    # for i in range(mpc_optimizer.horizon):
-    #     x = mpc_optimizer.target_states[i, 0]
-    #     y = mpc_optimizer.target_states[i, 1]
-    #     r = radius[i]
-    #     currentAxis.add_patch(Circle((x, y), radius=r, alpha=1))
-    # plt.figure(figsize=(8*1.1, 6*1.1))
-    # plt.title('SQP: state vs. time.  ')
-    # plt.plot(mpc_optimizer.states[:, 2], '-b', linewidth=1.0, label='speed')
-    # plt.plot(ref_vel, '-r', linewidth=1.0, label='target speed')
-    # plt.ylabel('speed')
-    # plt.figure(figsize=(8*1.1, 6*1.1))
-    # plt.title('SQP: input vs. time.  ')
-    # plt.plot(mpc_optimizer.inputs[:, 0], '-b', linewidth=1.0, label='turning rate')
-    # plt.ylabel('inputs')
-    plt.show()
-
+    # corner_example()
+    random_example_2()
 
 # plot(mpc_optimizer)
