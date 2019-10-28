@@ -51,9 +51,6 @@ class iterative_LQR:
         alpha = 1.0
         cnt = 50
         while (cnt >= 0):
-            if alpha < 1e-4:
-                self.converge = True
-                break
             cnt -= 1
             for i in range(0, self.horizon - 1):
                 self.inputs[i, :] = self.inputs[i, :] + alpha*np.reshape(self.k[i, :, :], (-1,)) + np.reshape(
@@ -69,9 +66,12 @@ class iterative_LQR:
                 self.min_cost = cost
                 break
             else:
-                alpha /= 2.0
                 self.states = np.copy(prev_states)
                 self.inputs = np.copy(prev_inputs)
+                if alpha < 1e-4:
+                    self.converge = True
+                    break
+                alpha /= 2.0
 
     def backward_pass(self):
         self.k = np.zeros((self.horizon - 1, self.m_inputs, 1))
