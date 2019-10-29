@@ -154,9 +154,6 @@ class sequential_QP_optimizer:
             alpha = 1.0
             cost = np.inf
             while True:
-                if alpha < self.eps or abs(1 - cost/self.min_cost) < self.cost_eps:
-                    self.converge = True
-                    break
                 self.inputs = prev_inputs + alpha*d_u
                 self.states = self.sim(self.x0, self.inputs)
                 cost = self.cost()
@@ -166,6 +163,9 @@ class sequential_QP_optimizer:
                     break
                 else:
                     # print("cost not redeuced, reduce learning rate, alpha: ", alpha)
-                    alpha /= 2.0
                     self.states = np.copy(prev_states)
                     self.inputs = np.copy(prev_inputs)
+                    if alpha < self.eps or abs(1 - cost/self.min_cost) < self.cost_eps:
+                        self.converge = True
+                        break
+                    alpha /= 2.0
