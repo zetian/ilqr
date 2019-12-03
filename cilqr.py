@@ -33,9 +33,12 @@ class iterative_LQR:
         self.Q = sys.Q
         self.R = sys.R
         self.Qf = sys.Q_f
+        self.control_limited = True
         self.maxIter = 100
         self.min_cost = 0.0
         self.LM_parameter = 0.0
+        self.input_limit_lambda = 1e-4
+        self.alpha_terminal = 1e-2
         self.states = np.zeros(
             (self.horizon, self.n_states))
         self.inputs = np.zeros(
@@ -76,7 +79,7 @@ class iterative_LQR:
             else:
                 self.states = np.copy(prev_states)
                 self.inputs = np.copy(prev_inputs)
-                if alpha < 1e-4:
+                if alpha < self.alpha_terminal:
                     self.converge = True
                     break
                 alpha /= 2.0
@@ -106,31 +109,30 @@ class iterative_LQR:
             Qux = dl_dudx + np.dot(np.dot(df_du.T, Vxx_augmented), df_dx)
             Quu_inv = np.linalg.inv(Quu)
 
-            P = sparse.csc_matrix(Quu)
-            q = 2*Qu
-            A = sparse.csc_matrix(np.eye(self.m_inputs))
-            l = self.system.control_lower_limit - self.inputs[i, :]
-            u = self.system.control_upper_limit - self.inputs[i, :]
-            prob = osqp.OSQP()
+            if (self.control_limited):
+                P = sparse.csc_matrix(Quu)
+                q = 2*Qu
+                A = sparse.csc_matrix(np.eye(self.m_inputs))
+                l = self.system.control_lower_limit - self.inputs[i, :]
+                u = self.system.control_upper_limit - self.inputs[i, :]
+                prob = osqp.OSQP()
 
-            # Setup workspace and change alpha parameter
-            prob.setup(P, q, A, l, u, verbose=False)
+                # Setup workspace and change alpha parameter
+                prob.setup(P, q, A, l, u, verbose=False)
 
-            # Solve problem
-            res = prob.solve()
+                # Solve problem
+                res = prob.solve()
 
-            # print(res.x)
-            k = res.x;
-            
-            # k = -np.dot(Quu_inv, Qu)
-            # print(k)
-            # K = -np.dot(Quu_inv, Qux)
-            if (abs(res.y[1]) > 0.0001):
-                K = np.zeros((self.m_inputs, self.n_states))
-            else:
-                K = -np.dot(Quu_inv, Qux)
-            # K = -np.dot(Quu_inv, Qux)
-            # print(K)
+            k = -np.dot(Quu_inv, Qu)
+            K = -np.dot(Quu_inv, Qux)
+            if (self.control_limited):
+                flag = True
+                for it in res.y:
+                    flag = flag and abs(it) > self.input_limit_lambda
+                if flag:
+                    k = res.x;
+                    K = np.zeros((self.m_inputs, self.n_states))
+
             self.k[i, :, :] = np.reshape(k, (-1, 1), order='F')
             self.K[i, :, :] = K
             Vx = Qx + np.dot(K.T, Qu)
@@ -140,7 +142,7 @@ class iterative_LQR:
         self.min_cost = self.cost()
         for iter in range(self.maxIter):
             # print(iter)
-            print(self.cost())
+            # print(self.cost())
             if (self.converge):
                 break
             self.backward_pass()
@@ -177,12 +179,13 @@ def example_acc():
             np.sin(target_states[i-1, 3])*dt*ref_vel[i - 1]
         target_states[i, 2] = ref_vel[i]
         target_states[i, 3] = target_states[i-1, 3] + curv*dt
-        noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 3)
-        noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 3)
+        noisy_targets[i, 0] = target_states[i, 0] + random.uniform(0, 15)
+        noisy_targets[i, 1] = target_states[i, 1] + random.uniform(0, 15)
         noisy_targets[i, 2] = ref_vel[i]
         noisy_targets[i, 3] = target_states[i, 3] + random.uniform(0, 0.5)
 
     for i in range(1, horizon):
+        # init_inputs[i - 1, 0] = 0.3
         init_inputs[i - 1, 0] = (noisy_targets[i, 2] -
                                  noisy_targets[i - 1, 2])/dt
         init_inputs[i - 1, 1] = (noisy_targets[i, 3] -
@@ -204,17 +207,6 @@ def example_acc():
     plt.figure
     plt.title('jerks')
     plt.plot(jerks, '--r', label='jerks', linewidth=2)
-
-    plt.figure(figsize=(8*1.1, 6*1.1))
-    plt.title('iLQR: 2D, x and y.  ')
-    plt.axis('equal')
-    plt.plot(noisy_targets[:, 0],
-             noisy_targets[:, 1], '--r', label='Target', linewidth=2)
-    plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
-             '-+k', label='iLQR', linewidth=1.0)
-    plt.legend(loc='upper left')
-    plt.xlabel('x (meters)')
-    plt.ylabel('y (meters)')
     plt.figure(figsize=(8*1.1, 6*1.1))
     plt.title('iLQR: state vs. time.  ')
     plt.plot(optimizer.states[:, 2], '-b', linewidth=1.0, label='speed')
@@ -227,6 +219,16 @@ def example_acc():
     plt.plot(optimizer.inputs[:, 1], '-b',
              linewidth=1.0, label='turning rate')
     plt.ylabel('acceleration and turning rate input')
+    plt.figure(figsize=(8*1.1, 6*1.1))
+    plt.title('iLQR: 2D, x and y.  ')
+    plt.axis('equal')
+    plt.plot(noisy_targets[:, 0],
+             noisy_targets[:, 1], '--r', label='Target', linewidth=2)
+    plt.plot(optimizer.states[:, 0], optimizer.states[:, 1],
+             '-+k', label='iLQR', linewidth=1.0)
+    plt.legend(loc='upper left')
+    plt.xlabel('x (meters)')
+    plt.ylabel('y (meters)')
     plt.show()
 
 if __name__ == '__main__':
